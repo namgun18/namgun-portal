@@ -44,11 +44,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" @click.self="emit('close')">
-    <div class="bg-background rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] mx-4 flex flex-col">
+  <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60" @click.self="emit('close')">
+    <div class="bg-background rounded-t-xl sm:rounded-lg shadow-xl w-full sm:max-w-4xl max-h-[85vh] sm:max-h-[90vh] sm:mx-4 flex flex-col">
       <!-- Header -->
-      <div class="flex items-center justify-between px-6 py-3 border-b shrink-0">
-        <h2 class="text-sm font-medium truncate">{{ item.name }}</h2>
+      <div class="flex items-center justify-between px-4 sm:px-6 py-3 border-b shrink-0">
+        <h2 class="text-sm font-medium truncate pr-2">{{ item.name }}</h2>
         <div class="flex items-center gap-2">
           <button
             @click="downloadFile(item.path)"
@@ -68,7 +68,7 @@ onMounted(() => {
       </div>
 
       <!-- Content -->
-      <div class="flex-1 overflow-auto p-4 min-h-0">
+      <div class="flex-1 overflow-auto p-2 sm:p-4 min-h-0">
         <!-- Image -->
         <div v-if="previewType === 'image'" class="flex items-center justify-center h-full">
           <img
@@ -82,7 +82,7 @@ onMounted(() => {
         <div v-else-if="previewType === 'pdf'" class="h-full">
           <iframe
             :src="getPreviewUrl(item.path)"
-            class="w-full h-full min-h-[60vh] rounded border"
+            class="w-full h-full min-h-[50vh] sm:min-h-[60vh] rounded border"
           />
         </div>
 

@@ -51,11 +51,11 @@ const hasErrors = computed(() => results.value.some(r => !r.ok))
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="emit('close')">
-    <div class="bg-background rounded-lg shadow-xl w-full max-w-lg mx-4">
+  <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" @click.self="emit('close')">
+    <div class="bg-background rounded-t-xl sm:rounded-lg shadow-xl w-full sm:max-w-lg sm:mx-4">
       <!-- Header -->
-      <div class="flex items-center justify-between px-6 py-4 border-b">
-        <h2 class="text-lg font-semibold">파일 업로드</h2>
+      <div class="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b">
+        <h2 class="text-base sm:text-lg font-semibold">파일 업로드</h2>
         <button @click="emit('close')" class="h-8 w-8 flex items-center justify-center rounded-md hover:bg-accent">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4">
             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -63,8 +63,8 @@ const hasErrors = computed(() => results.value.some(r => !r.ok))
         </button>
       </div>
 
-      <div class="p-6">
-        <p class="text-sm text-muted-foreground mb-4">
+      <div class="p-4 sm:p-6">
+        <p class="text-sm text-muted-foreground mb-3 sm:mb-4">
           업로드 위치: <span class="font-medium text-foreground">{{ currentPath || '/' }}</span>
         </p>
 
@@ -74,7 +74,7 @@ const hasErrors = computed(() => results.value.some(r => !r.ok))
           @dragleave="handleDragLeave"
           @drop="handleDrop"
           @click="triggerFileInput"
-          class="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors"
+          class="border-2 border-dashed rounded-lg p-6 sm:p-8 text-center cursor-pointer transition-colors"
           :class="isDragging ? 'border-primary bg-primary/5' : 'border-muted-foreground/30 hover:border-primary/50'"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-10 w-10 mx-auto mb-3 text-muted-foreground">
@@ -116,7 +116,7 @@ const hasErrors = computed(() => results.value.some(r => !r.ok))
       </div>
 
       <!-- Footer -->
-      <div class="flex justify-end px-6 py-3 border-t">
+      <div class="flex justify-end px-4 sm:px-6 py-3 border-t">
         <button
           @click="emit('close')"
           class="px-4 py-2 text-sm rounded-md hover:bg-accent transition-colors"
@@ -124,6 +124,7 @@ const hasErrors = computed(() => results.value.some(r => !r.ok))
           닫기
         </button>
       </div>
+      <div class="h-safe-area-inset-bottom sm:hidden" />
     </div>
   </div>
 </template>

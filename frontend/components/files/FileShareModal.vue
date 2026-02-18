@@ -38,11 +38,11 @@ async function copyUrl() {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="emit('close')">
-    <div class="bg-background rounded-lg shadow-xl w-full max-w-md mx-4">
+  <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" @click.self="emit('close')">
+    <div class="bg-background rounded-t-xl sm:rounded-lg shadow-xl w-full sm:max-w-md sm:mx-4">
       <!-- Header -->
-      <div class="flex items-center justify-between px-6 py-4 border-b">
-        <h2 class="text-lg font-semibold">공유 링크 생성</h2>
+      <div class="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b">
+        <h2 class="text-base sm:text-lg font-semibold">공유 링크 생성</h2>
         <button @click="emit('close')" class="h-8 w-8 flex items-center justify-center rounded-md hover:bg-accent">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4">
             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -50,7 +50,7 @@ async function copyUrl() {
         </button>
       </div>
 
-      <div class="p-6 space-y-4">
+      <div class="p-4 sm:p-6 space-y-4">
         <div>
           <p class="text-sm text-muted-foreground">파일</p>
           <p class="text-sm font-medium">{{ item.name }}</p>
@@ -95,7 +95,7 @@ async function copyUrl() {
       </div>
 
       <!-- Footer -->
-      <div class="flex justify-end gap-2 px-6 py-3 border-t">
+      <div class="flex justify-end gap-2 px-4 sm:px-6 py-3 border-t">
         <button
           @click="emit('close')"
           class="px-4 py-2 text-sm rounded-md hover:bg-accent transition-colors"
@@ -111,6 +111,7 @@ async function copyUrl() {
           {{ creating ? '생성 중...' : '링크 생성' }}
         </button>
       </div>
+      <div class="h-safe-area-inset-bottom sm:hidden" />
     </div>
   </div>
 </template>

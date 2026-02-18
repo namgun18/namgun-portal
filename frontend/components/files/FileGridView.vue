@@ -27,9 +27,9 @@ function formatSize(bytes: number): string {
 </script>
 
 <template>
-  <div class="flex-1 overflow-auto p-4">
+  <div class="flex-1 overflow-auto p-2 sm:p-4">
     <!-- Loading -->
-    <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+    <div v-if="loading" class="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3">
       <div v-for="i in 8" :key="i" class="aspect-square bg-muted/50 rounded-lg animate-pulse" />
     </div>
 
@@ -42,13 +42,13 @@ function formatSize(bytes: number): string {
     </div>
 
     <!-- Grid -->
-    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+    <div v-else class="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3">
       <div
         v-for="item in sortedItems"
         :key="item.path"
         @click="handleClick(item)"
         @contextmenu.prevent="emit('contextmenu', $event, item)"
-        class="group relative rounded-lg border p-2 cursor-pointer transition-all hover:shadow-md"
+        class="group relative rounded-lg border p-1.5 sm:p-2 cursor-pointer transition-all hover:shadow-md"
         :class="selectedItems.has(item.path) ? 'ring-2 ring-primary bg-accent/30' : 'hover:bg-accent/30'"
       >
         <!-- Checkbox -->

@@ -16,11 +16,11 @@ const {
 const showUpload = ref(false)
 const showNewFolder = ref(false)
 const newFolderName = ref('')
-const selectedFile = ref<FileItem | null>(null)
 const previewFile = ref<FileItem | null>(null)
 const shareFile = ref<FileItem | null>(null)
 const contextMenu = ref<{ item: FileItem; x: number; y: number } | null>(null)
 const detailItem = ref<FileItem | null>(null)
+const showMobileSidebar = ref(false)
 
 // Drag overlay
 const isDragOver = ref(false)
@@ -118,8 +118,24 @@ async function handleDrop(e: DragEvent) {
       </div>
     </div>
 
-    <!-- Sidebar -->
-    <FilesFileSidebar />
+    <!-- Mobile sidebar overlay -->
+    <div
+      v-if="showMobileSidebar"
+      class="md:hidden fixed inset-0 z-30 bg-black/40"
+      @click="showMobileSidebar = false"
+    />
+
+    <!-- Sidebar: hidden on mobile, slide-in overlay -->
+    <div
+      class="shrink-0 h-full z-30 transition-transform duration-200
+        fixed md:relative
+        w-64 md:w-56
+        bg-background md:bg-transparent
+        shadow-xl md:shadow-none"
+      :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
+    >
+      <FilesFileSidebar @navigate="showMobileSidebar = false" />
+    </div>
 
     <!-- Main content -->
     <div class="flex-1 flex flex-col min-w-0">
@@ -127,6 +143,7 @@ async function handleDrop(e: DragEvent) {
       <FilesFileCommandBar
         @upload="showUpload = true"
         @new-folder="handleNewFolder"
+        @toggle-sidebar="showMobileSidebar = !showMobileSidebar"
       />
 
       <!-- Breadcrumb -->
@@ -146,7 +163,7 @@ async function handleDrop(e: DragEvent) {
           @contextmenu="handleContextMenu"
         />
 
-        <!-- Detail panel -->
+        <!-- Detail panel: side on desktop, modal on mobile -->
         <FilesFileDetailPanel
           :item="detailItem"
           @close="detailItem = null"
@@ -198,7 +215,6 @@ async function handleDrop(e: DragEvent) {
           placeholder="폴더 이름"
           class="w-full px-3 py-2 text-sm bg-background border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
           @keydown.enter="confirmNewFolder"
-          ref="newFolderInput"
         />
         <div class="flex justify-end gap-2 mt-4">
           <button @click="showNewFolder = false" class="px-4 py-2 text-sm rounded-md hover:bg-accent transition-colors">

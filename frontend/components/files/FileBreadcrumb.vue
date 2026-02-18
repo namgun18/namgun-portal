@@ -3,7 +3,7 @@ const { breadcrumbs, navigateTo } = useFiles()
 </script>
 
 <template>
-  <div class="flex items-center gap-1 px-4 py-2 text-sm border-b bg-muted/20 overflow-x-auto">
+  <div class="flex items-center gap-1 px-2 sm:px-4 py-1.5 sm:py-2 text-sm border-b bg-muted/20 overflow-x-auto scrollbar-none">
     <button
       @click="navigateTo('')"
       class="text-muted-foreground hover:text-foreground transition-colors shrink-0"

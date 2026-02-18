@@ -118,7 +118,7 @@ const isAllSelected = computed(() =>
           class="border-b hover:bg-accent/50 cursor-pointer transition-colors"
           :class="selectedItems.has(item.path) ? 'bg-accent/30' : ''"
         >
-          <td class="px-3 py-2" @click.stop>
+          <td class="px-2 sm:px-3 py-2.5 sm:py-2" @click.stop>
             <input
               type="checkbox"
               :checked="selectedItems.has(item.path)"
@@ -126,7 +126,7 @@ const isAllSelected = computed(() =>
               class="rounded border-muted-foreground/30"
             />
           </td>
-          <td class="px-2 py-2">
+          <td class="px-2 py-2.5 sm:py-2">
             <div class="flex items-center gap-2">
               <!-- File type icons -->
               <svg v-if="getFileIcon(item) === 'folder'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 text-blue-500 shrink-0">
@@ -144,8 +144,8 @@ const isAllSelected = computed(() =>
               <span class="truncate">{{ item.name }}</span>
             </div>
           </td>
-          <td class="px-2 py-2 text-muted-foreground hidden sm:table-cell">{{ formatDate(item.modified_at) }}</td>
-          <td class="px-2 py-2 text-muted-foreground hidden sm:table-cell">{{ item.is_dir ? '—' : formatSize(item.size) }}</td>
+          <td class="px-2 py-2.5 sm:py-2 text-muted-foreground hidden sm:table-cell">{{ formatDate(item.modified_at) }}</td>
+          <td class="px-2 py-2.5 sm:py-2 text-muted-foreground hidden sm:table-cell">{{ item.is_dir ? '—' : formatSize(item.size) }}</td>
         </tr>
       </tbody>
     </table>

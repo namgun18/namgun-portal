@@ -481,23 +481,23 @@ async function main() {
 
   const files = [
     {
-      input: path.join(baseDir, "project_progress_ko.md"),
-      output: path.join(baseDir, "project_progress_ko.docx"),
+      input: path.join(baseDir, "docs/progress/project_progress_ko.md"),
+      output: path.join(baseDir, "docs/progress/project_progress_ko.docx"),
       title: "namgun.or.kr 종합 포털 SSO 통합 플랫폼 - 프로젝트 진행 보고서",
     },
     {
-      input: path.join(baseDir, "project_progress_en.md"),
-      output: path.join(baseDir, "project_progress_en.docx"),
+      input: path.join(baseDir, "docs/progress/project_progress_en.md"),
+      output: path.join(baseDir, "docs/progress/project_progress_en.docx"),
       title: "namgun.or.kr Integrated Portal SSO Platform - Project Progress Report",
     },
     {
-      input: path.join(baseDir, "phase2_mail_migration_ko.md"),
-      output: path.join(baseDir, "phase2_mail_migration_ko.docx"),
+      input: path.join(baseDir, "docs/phase2/phase2_mail_migration_ko.md"),
+      output: path.join(baseDir, "docs/phase2/phase2_mail_migration_ko.docx"),
       title: "Phase 2: iRedMail → Stalwart Mail Server 마이그레이션",
     },
     {
-      input: path.join(baseDir, "phase2_mail_migration_en.md"),
-      output: path.join(baseDir, "phase2_mail_migration_en.docx"),
+      input: path.join(baseDir, "docs/phase2/phase2_mail_migration_en.md"),
+      output: path.join(baseDir, "docs/phase2/phase2_mail_migration_en.docx"),
       title: "Phase 2: iRedMail to Stalwart Mail Server Migration",
     },
   ];

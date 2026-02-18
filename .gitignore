@@ -1,3 +1,13 @@
 node_modules/
-package.json
-package-lock.json
+.nuxt/
+.output/
+__pycache__/
+*.pyc
+.pytest_cache/
+backend/.venv/
+.env
+!.env.example
+*.db
+data/
+dist/
+*.log

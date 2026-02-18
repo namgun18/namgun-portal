@@ -1,0 +1,116 @@
+## ===========================================
+## namgun.or.kr Portal — Docker Compose
+## ===========================================
+## WSL2 주의: PostgreSQL은 named volume 필수 (NTFS bind mount 불가)
+## ===========================================
+
+services:
+  # ─── PostgreSQL 16 ───
+  portal-db:
+    image: postgres:16-alpine
+    container_name: portal-db
+    profiles: [prod, dev]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-portal}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-portal}
+    volumes:
+      - portal-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-portal}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - portal-internal
+
+  # ─── FastAPI 백엔드 ───
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: portal-backend
+    profiles: [prod, dev]
+    env_file: .env
+    depends_on:
+      portal-db:
+        condition: service_healthy
+    volumes:
+      - portal-storage:/storage
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - portal-internal
+
+  # ─── Nuxt 3 SSR 프론트엔드 ───
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: portal-frontend
+    profiles: [prod, dev]
+    expose:
+      - "3000"
+    restart: unless-stopped
+    networks:
+      - portal-internal
+
+  # ─── 내부 Nginx (프로덕션) ───
+  nginx:
+    image: nginx:alpine
+    container_name: portal-nginx
+    profiles: [prod]
+    ports:
+      - "${PORTAL_HTTP_PORT:-8080}:8080"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - portal-internal
+
+  # ─── 내부 Nginx (개발) ───
+  nginx-dev:
+    image: nginx:alpine
+    container_name: portal-nginx-dev
+    profiles: [dev]
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - portal-internal
+
+volumes:
+  portal-db-data:
+    name: portal-db-data
+  portal-storage:
+    name: portal-storage
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=192.168.0.100,nfsvers=4,rw,hard,noatime,nolock
+      device: ":/portal"
+
+networks:
+  portal-internal:
+    name: portal-internal

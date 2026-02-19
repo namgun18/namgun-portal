@@ -3,6 +3,7 @@
 import mimetypes
 import os
 import shutil
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -12,6 +13,14 @@ from app.files.schemas import FileItem
 
 settings = get_settings()
 STORAGE_ROOT = Path(settings.storage_root)
+
+# TTL cache: {real_path_str: (timestamp, [FileItem, ...])}
+_dir_cache: dict[str, tuple[float, list[FileItem]]] = {}
+_CACHE_TTL = 30  # seconds
+
+# TTL cache for directory sizes: {path_str: (timestamp, size_bytes)}
+_size_cache: dict[str, tuple[float, int]] = {}
+_SIZE_CACHE_TTL = 60  # seconds
 
 
 class PathSecurityError(Exception):
@@ -83,11 +92,8 @@ def ensure_shared_dir() -> None:
     shared_dir.mkdir(parents=True, exist_ok=True)
 
 
-def list_directory(real_path: Path, virtual_prefix: str) -> list[FileItem]:
-    """List contents of a directory."""
-    if not real_path.is_dir():
-        return []
-
+def _scan_directory(real_path: Path, virtual_prefix: str) -> list[FileItem]:
+    """Perform actual NFS I/O to list directory contents."""
     items: list[FileItem] = []
     try:
         for entry in sorted(real_path.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower())):
@@ -109,18 +115,55 @@ def list_directory(real_path: Path, virtual_prefix: str) -> list[FileItem]:
             )
     except PermissionError:
         pass
-
     return items
 
 
+def list_directory(real_path: Path, virtual_prefix: str) -> list[FileItem]:
+    """List contents of a directory (with TTL cache)."""
+    if not real_path.is_dir():
+        return []
+
+    cache_key = str(real_path.resolve())
+    now = time.monotonic()
+
+    cached = _dir_cache.get(cache_key)
+    if cached is not None:
+        ts, items = cached
+        if now - ts < _CACHE_TTL:
+            return items
+
+    items = _scan_directory(real_path, virtual_prefix)
+    _dir_cache[cache_key] = (now, items)
+    return items
+
+
+def invalidate_cache(real_path: Path) -> None:
+    """Remove a directory from the listing cache and size cache."""
+    key = str(real_path.resolve())
+    _dir_cache.pop(key, None)
+    # Also invalidate size caches (parent dirs may be affected)
+    _size_cache.clear()
+
+
 def get_dir_size(path: Path) -> int:
-    """Get total size of all files in a directory tree."""
-    total = 0
+    """Get total size of all files in a directory tree (with TTL cache)."""
     if not path.exists():
         return 0
+
+    cache_key = str(path.resolve())
+    now = time.monotonic()
+    cached = _size_cache.get(cache_key)
+    if cached is not None:
+        ts, size = cached
+        if now - ts < _SIZE_CACHE_TTL:
+            return size
+
+    total = 0
     for f in path.rglob("*"):
         if f.is_file():
             total += f.stat().st_size
+
+    _size_cache[cache_key] = (now, total)
     return total
 
 

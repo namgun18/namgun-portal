@@ -22,6 +22,19 @@ class Settings(BaseSettings):
     storage_root: str = "/storage"
     upload_max_size_mb: int = 1024
 
+    # Stalwart Mail (JMAP)
+    stalwart_url: str = "http://192.168.0.250:8080"
+    stalwart_admin_user: str = "admin"
+    stalwart_admin_password: str = ""
+
+    # BigBlueButton
+    bbb_url: str = "https://meet.namgun.or.kr/bigbluebutton/api"
+    bbb_secret: str = ""
+
+    # Authentik Native Login
+    authentik_flow_slug: str = "default-authentication-flow"
+    bridge_redirect_uri: str = "https://auth.namgun.or.kr/portal-bridge/callback"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

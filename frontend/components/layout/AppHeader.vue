@@ -38,6 +38,20 @@ function toggleDark() {
           >
             파일
           </NuxtLink>
+          <NuxtLink
+            to="/mail"
+            class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
+            :class="route.path === '/mail' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'"
+          >
+            메일
+          </NuxtLink>
+          <NuxtLink
+            to="/meetings"
+            class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
+            :class="route.path === '/meetings' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'"
+          >
+            회의
+          </NuxtLink>
         </nav>
       </div>
 
@@ -121,6 +135,22 @@ function toggleDark() {
         :class="route.path.startsWith('/files') ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'"
       >
         파일
+      </NuxtLink>
+      <NuxtLink
+        to="/mail"
+        @click="mobileMenuOpen = false"
+        class="block px-3 py-2 text-sm font-medium rounded-md transition-colors"
+        :class="route.path === '/mail' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'"
+      >
+        메일
+      </NuxtLink>
+      <NuxtLink
+        to="/meetings"
+        @click="mobileMenuOpen = false"
+        class="block px-3 py-2 text-sm font-medium rounded-md transition-colors"
+        :class="route.path === '/meetings' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'"
+      >
+        회의
       </NuxtLink>
     </div>
   </header>

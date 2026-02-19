@@ -1,12 +1,62 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'auth' })
 
-const { login, user } = useAuth()
+const { nativeLogin, user } = useAuth()
+const route = useRoute()
 
-// If already logged in, redirect to dashboard
+const username = ref('')
+const password = ref('')
+const error = ref('')
+const submitting = ref(false)
+
+// Redirect destination after login (from query param or default to dashboard)
+const redirectTo = computed(() => {
+  const r = route.query.redirect as string | undefined
+  // Only allow https URLs from our domain or relative paths
+  if (r && (r.startsWith('https://') && r.includes('.namgun.or.kr'))) return r
+  return '/'
+})
+
+// If already logged in, redirect
 watch(user, (u) => {
-  if (u) navigateTo('/')
+  if (u) {
+    const dest = redirectTo.value
+    if (dest.startsWith('https://')) {
+      window.location.href = dest
+    } else {
+      navigateTo(dest)
+    }
+  }
 }, { immediate: true })
+
+async function handleSubmit() {
+  if (!username.value.trim() || !password.value) {
+    error.value = '사용자명과 비밀번호를 입력하세요.'
+    return
+  }
+  submitting.value = true
+  error.value = ''
+  try {
+    await nativeLogin(username.value.trim(), password.value)
+    const dest = redirectTo.value
+    if (dest.startsWith('https://')) {
+      window.location.href = dest
+    } else {
+      navigateTo(dest)
+    }
+  } catch (e: any) {
+    const msg = e?.message || e?.data?.detail || ''
+    if (e?.statusCode === 401 || e?.status === 401 || msg.includes('authenticate') || msg.includes('Invalid')) {
+      error.value = '사용자명 또는 비밀번호가 올바르지 않습니다.'
+    } else if (msg.includes('timeout') || msg.includes('Timeout')) {
+      error.value = '로그인 서버 응답 시간이 초과되었습니다.'
+    } else {
+      error.value = '로그인 중 오류가 발생했습니다. 다시 시도해주세요.'
+    }
+  } finally {
+    submitting.value = false
+  }
+}
 </script>
 
 <template>
@@ -22,11 +72,47 @@ watch(user, (u) => {
       </p>
     </div>
 
-    <UiButton class="w-full" size="lg" @click="login">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 mr-2">
-        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" />
-      </svg>
-      Authentik으로 로그인
-    </UiButton>
+    <form @submit.prevent="handleSubmit" class="space-y-4">
+      <div>
+        <label for="username" class="block text-sm font-medium mb-1.5">사용자명 또는 이메일</label>
+        <input
+          id="username"
+          v-model="username"
+          type="text"
+          autocomplete="username"
+          placeholder="사용자명 또는 이메일"
+          class="w-full px-3 py-2.5 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
+          autofocus
+        />
+      </div>
+
+      <div>
+        <label for="password" class="block text-sm font-medium mb-1.5">비밀번호</label>
+        <input
+          id="password"
+          v-model="password"
+          type="password"
+          autocomplete="current-password"
+          placeholder="비밀번호"
+          class="w-full px-3 py-2.5 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
+        />
+      </div>
+
+      <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
+
+      <UiButton
+        type="submit"
+        class="w-full"
+        size="lg"
+        :disabled="submitting"
+      >
+        <svg v-if="submitting" class="h-4 w-4 mr-2 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        {{ submitting ? '로그인 중...' : '로그인' }}
+      </UiButton>
+    </form>
+
   </div>
 </template>

@@ -18,12 +18,12 @@ SERVICE_DEFS = [
     {
         "name": "Gitea",
         "health_url": "http://192.168.0.50:3000/api/v1/version",
-        "external_url": "https://git.namgun.or.kr",
+        "external_url": "https://git.namgun.or.kr/user/oauth2/authentik",
         "internal_only": False,
     },
     {
         "name": "RustDesk",
-        "health_url": "https://remote.namgun.or.kr/api/heartbeat",
+        "health_tcp": "192.168.0.50:21114",
         "external_url": "https://remote.namgun.or.kr",
         "internal_only": False,
     },
@@ -37,11 +37,11 @@ SERVICE_DEFS = [
         "name": "Stalwart Mail",
         "health_url": "http://192.168.0.250:8080/healthz",
         "external_url": "https://mail.namgun.or.kr",
-        "internal_only": False,
+        "internal_only": True,
     },
     {
-        "name": "Pi-Hole",
-        "health_url": "http://192.168.0.251/admin/api.php?status",
+        "name": "화상회의 (BBB)",
+        "health_url": "https://meet.namgun.or.kr/bigbluebutton/api",
         "external_url": None,
         "internal_only": True,
     },
@@ -53,13 +53,26 @@ _check_interval = 60  # seconds
 
 
 async def check_service(svc: dict) -> ServiceStatus:
-    """Check a single service health endpoint."""
+    """Check a single service health endpoint (HTTP or TCP)."""
+    elapsed_ms = None
+    status = "down"
+
     try:
         start = time.monotonic()
-        async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
-            resp = await client.get(svc["health_url"])
+        if "health_tcp" in svc:
+            host, port = svc["health_tcp"].rsplit(":", 1)
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(host, int(port)), timeout=5.0
+            )
+            writer.close()
+            await writer.wait_closed()
             elapsed_ms = int((time.monotonic() - start) * 1000)
-            status = "ok" if resp.status_code < 400 else "down"
+            status = "ok"
+        else:
+            async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+                resp = await client.get(svc["health_url"])
+                elapsed_ms = int((time.monotonic() - start) * 1000)
+                status = "ok" if resp.status_code < 400 else "down"
     except Exception:
         elapsed_ms = None
         status = "down"

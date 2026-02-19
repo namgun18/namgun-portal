@@ -9,6 +9,8 @@ from app.auth.router import router as auth_router
 from app.services.router import router as services_router
 from app.services.health import run_health_checker
 from app.files.router import router as files_router
+from app.mail.router import router as mail_router
+from app.meetings.router import router as meetings_router
 
 settings = get_settings()
 _health_task = None
@@ -43,6 +45,8 @@ app = FastAPI(
 app.include_router(auth_router)
 app.include_router(services_router)
 app.include_router(files_router)
+app.include_router(mail_router)
+app.include_router(meetings_router)
 
 
 @app.get("/api/health")

@@ -1,5 +1,6 @@
 """File browser API endpoints."""
 
+import asyncio
 import secrets
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -77,7 +78,7 @@ async def list_files(
     if not real.exists():
         real.mkdir(parents=True, exist_ok=True)
 
-    items = fs.list_directory(real, vp)
+    items = await asyncio.to_thread(fs.list_directory, real, vp)
     return FileListResponse(path=vp, items=items)
 
 
@@ -145,6 +146,7 @@ async def upload_file(
                 )
             f.write(chunk)
 
+    fs.invalidate_cache(real_dir)
     return {"ok": True, "name": file.filename, "size": written}
 
 
@@ -172,6 +174,7 @@ async def mkdir(body: MkdirRequest, user: User = Depends(get_current_user)):
         raise HTTPException(status_code=409, detail="Already exists")
 
     target.mkdir(parents=True)
+    fs.invalidate_cache(parent_real)
     return {"ok": True, "path": vp}
 
 
@@ -188,6 +191,7 @@ async def delete_file(
         raise HTTPException(status_code=404, detail="Not found")
 
     fs.delete_path(real)
+    fs.invalidate_cache(real.parent)
     return {"ok": True}
 
 
@@ -207,6 +211,7 @@ async def rename_file(body: RenameRequest, user: User = Depends(get_current_user
     except FileExistsError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
+    fs.invalidate_cache(real.parent)
     return {"ok": True, "new_name": new_path.name}
 
 
@@ -227,6 +232,8 @@ async def move_file(body: MoveRequest, user: User = Depends(get_current_user)):
     except FileExistsError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
+    fs.invalidate_cache(src_real.parent)
+    fs.invalidate_cache(dst_real)
     return {"ok": True}
 
 
@@ -271,8 +278,12 @@ async def preview_file(
 @router.get("/info", response_model=StorageInfo)
 async def storage_info(user: User = Depends(get_current_user)):
     fs.ensure_user_dir(user)
-    personal = fs.get_dir_size(Path(settings.storage_root) / "users" / user.id)
-    shared = fs.get_dir_size(Path(settings.storage_root) / "shared")
+    personal_path = Path(settings.storage_root) / "users" / user.id
+    shared_path = Path(settings.storage_root) / "shared"
+    personal, shared = await asyncio.gather(
+        asyncio.to_thread(fs.get_dir_size, personal_path),
+        asyncio.to_thread(fs.get_dir_size, shared_path),
+    )
     return StorageInfo(personal_used=personal, shared_used=shared, total_available=0)
 
 

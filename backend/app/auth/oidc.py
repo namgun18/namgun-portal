@@ -40,7 +40,9 @@ def build_authorize_url(state: str, code_challenge: str) -> str:
     return f"{AUTHORIZE_URL}?{urlencode(params)}"
 
 
-async def exchange_code(code: str, code_verifier: str) -> dict:
+async def exchange_code(
+    code: str, code_verifier: str, redirect_uri: str | None = None
+) -> dict:
     """Exchange authorization code for tokens."""
     async with httpx.AsyncClient() as client:
         resp = await client.post(
@@ -48,7 +50,7 @@ async def exchange_code(code: str, code_verifier: str) -> dict:
             data={
                 "grant_type": "authorization_code",
                 "code": code,
-                "redirect_uri": settings.oidc_redirect_uri,
+                "redirect_uri": redirect_uri or settings.oidc_redirect_uri,
                 "client_id": settings.oidc_client_id,
                 "client_secret": settings.oidc_client_secret,
                 "code_verifier": code_verifier,

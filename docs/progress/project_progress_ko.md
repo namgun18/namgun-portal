@@ -11,6 +11,7 @@
 | 버전 | 날짜 | 작성자 | 비고 |
 |------|------|--------|------|
 | v1.0 | 2026-02-18 | 남기완 | 최초 작성 (Phase 0 ~ Phase 2 완료 기준) |
+| v1.1 | 2026-02-19 | 남기완 | Phase 3 ~ Phase 6 완료 기준 갱신 |
 
 ---
 
@@ -23,7 +24,7 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 - 모든 서비스에 대한 SSO 인증 통합 (OIDC / LDAP)
 - ISMS-P 보안 기준에 준하는 인프라 구성
 - 셀프 호스팅 기반의 데이터 주권 확보
-- 단계적 서비스 확장 (Phase 0 ~ Phase 5)
+- 단계적 서비스 확장 (Phase 0 ~ Phase 6)
 
 ---
 
@@ -34,9 +35,10 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 | Phase 0 | 인프라 준비 | **완료** | — | Authentik, DNS, Nginx, TLS |
 | Phase 1 | SSO PoC | **완료** | — | Gitea OIDC, RustDesk OIDC |
 | Phase 2 | 메일 서버 마이그레이션 | **완료** | — | Stalwart + LDAP + OIDC |
-| Phase 3 | 포털 코어 개발 | 예정 | — | Nuxt 3 + FastAPI |
-| Phase 4 | 네이티브 통합 | 예정 | — | JMAP, WebDAV, CalDAV, CardDAV |
-| Phase 5 | 추가 서비스 통합 | 예정 | — | BBB Greenlight OIDC, OMV Proxy Auth |
+| Phase 3 | 포털 코어 개발 | **완료** | — | Nuxt 3 + FastAPI + PostgreSQL |
+| Phase 4 | 파일 브라우저 | **완료** | — | NFS 마운트 + 포털 내 파일 관리 UI |
+| Phase 5 | 서비스 개선 및 메일/회의 통합 | **완료** | — | BBB, 메일 iframe, 캐시, 네비게이션 |
+| Phase 6 | 네이티브 로그인 및 SSO 통합 | **완료** | — | 네이티브 로그인 폼, Popup Bridge, Gitea SSO |
 
 ---
 
@@ -58,12 +60,24 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
   │  [192.168.0.50] Windows Host (Dual Xeon Gold 6138, 128GB)     │
   │    └─ WSL2 / Docker                                            │
   │       ├─ Authentik (server + worker + PostgreSQL 16)           │
+  │       ├─ Portal Stack                                          │
+  │       │    ├─ portal-frontend (Nuxt 3 SSR, :3000)             │
+  │       │    ├─ portal-backend (FastAPI, :8000)                  │
+  │       │    ├─ portal-db (PostgreSQL 16, named volume)          │
+  │       │    └─ portal-nginx (내부 리버스 프록시, :8080)           │
   │       ├─ Gitea 1.25.4                                          │
   │       ├─ RustDesk Pro (hbbs + hbbr)                            │
   │       └─ Game Panel (backend + nginx + palworld)               │
   │                                                                │
+  │  [192.168.0.100] OMV (OpenMediaVault) — NAS                   │
+  │    └─ NFSv4 서버 (/export/root, fsid=0)                        │
+  │       └─ /portal → Docker NFS volume (/storage)                │
+  │                                                                │
   │  [192.168.0.150] Hyper-V VM — Nginx (Rocky Linux 10)          │
   │    └─ 중앙 리버스 프록시, TLS Termination                       │
+  │                                                                │
+  │  [192.168.0.249] BigBlueButton 3.0 (화상회의)                   │
+  │    └─ BBB API (SHA256 checksum 인증)                            │
   │                                                                │
   │  [192.168.0.250] Hyper-V VM — Mail (Rocky Linux 9.7)          │
   │    └─ Podman (rootless)                                        │
@@ -79,17 +93,19 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 
 | 서비스 | 서브도메인 | 호스트 | SSO 방식 | 상태 |
 |--------|-----------|--------|----------|------|
+| Portal | namgun.or.kr | 192.168.0.50 (Docker) | OIDC (네이티브) | 운영 중 |
 | Authentik | auth.namgun.or.kr | 192.168.0.50 (Docker) | — (IdP) | 운영 중 |
-| Gitea | git.namgun.or.kr | 192.168.0.50 (Docker) | OIDC | 운영 중 |
+| Gitea | git.namgun.or.kr | 192.168.0.50 (Docker) | OIDC + 포털 SSO | 운영 중 |
 | RustDesk Pro | remote.namgun.or.kr | 192.168.0.50 (Docker) | OIDC | 운영 중 |
 | Game Panel | game.namgun.or.kr | 192.168.0.50 (Docker) | Discord OAuth2 | 운영 중 |
-| Stalwart Mail | mail.namgun.or.kr | 192.168.0.250 (Podman) | LDAP + OIDC | 운영 중 |
+| BBB (화상회의) | meet.namgun.or.kr | 192.168.0.249 | OIDC (포털 내 통합) | 운영 중 |
+| OMV/Files | — | 192.168.0.100 (NFS) | 포털 내 파일브라우저 | 운영 중 |
+| Stalwart Mail | mail.namgun.or.kr | 192.168.0.250 (Podman) | LDAP + OIDC, 포털 내 iframe 통합 | 운영 중 |
 | LDAP Outpost | — | 192.168.0.250 (Podman sidecar) | — | 운영 중 |
 | Nginx Proxy | *.namgun.or.kr | 192.168.0.150 (VM) | — | 운영 중 |
 | Pi-Hole | — | 192.168.0.251 | — | 운영 중 |
-| BBB | meet.namgun.or.kr | TBD | OIDC (계획) | 계획 |
-| OMV/Files | file.namgun.or.kr | TBD | Proxy Auth (계획) | 계획 |
-| Portal | namgun.or.kr | TBD | OIDC (계획) | 계획 |
+
+> **Gitea 참고**: Gitea 로그인 페이지에서 자체 로그인 폼을 비활성화하고, OAuth2(Authentik) 버튼만 노출한다. 미인증 사용자가 Gitea에 접근하면 포털 로그인 페이지로 리다이렉트된다 (Nginx `portal_redirect` 룰).
 
 ---
 
@@ -316,7 +332,269 @@ postfix, dovecot, amavis, clamav, spamassassin, php-fpm
 
 ---
 
-## 7. 핵심 트러블슈팅 정리
+## 7. Phase 3: 포털 코어 개발 (완료)
+
+Nuxt 3 + FastAPI + PostgreSQL 기반의 포털 웹 애플리케이션 코어를 개발하고, Docker Compose 환경에서 프로덕션 배포를 완료하였다.
+
+### 7.1 기술 스택 및 아키텍처
+
+| 분류 | 기술 |
+|------|------|
+| 프론트엔드 | Nuxt 3 (Vue 3, SSR), shadcn-vue (UI 컴포넌트) |
+| 백엔드 | FastAPI, SQLAlchemy 2.0 (async), asyncpg |
+| 데이터베이스 | PostgreSQL 16 (Alpine) |
+| 인증 | OIDC via Authentik (PKCE S256) |
+| 세션 관리 | itsdangerous (URLSafeTimedSerializer), 서명된 쿠키 |
+| 컨테이너 | Docker Compose, `--profile prod` 배포 |
+
+### 7.2 Docker Compose 구성
+
+```
+docker compose --profile prod up -d --build
+```
+
+| 서비스 | 컨테이너명 | 포트 | 비고 |
+|--------|-----------|------|------|
+| portal-db | portal-db | — (내부) | PostgreSQL 16-alpine, named volume (`portal-db-data`) |
+| backend | portal-backend | 8000 (내부) | FastAPI, healthcheck `/api/health` |
+| frontend | portal-frontend | 3000 (내부) | Nuxt 3 SSR |
+| nginx | portal-nginx | 8080 (외부) | 내부 리버스 프록시, prod 프로필 전용 |
+
+> **WSL2 주의**: PostgreSQL은 NTFS bind mount가 불가하므로 Docker named volume (`portal-db-data`)을 사용한다.
+
+### 7.3 OIDC 인증 (Authentik)
+
+- **인증 플로우**: Authorization Code + PKCE (S256)
+- **엔드포인트**:
+  - Authorization: `https://auth.namgun.or.kr/application/o/authorize/`
+  - Token: `https://auth.namgun.or.kr/application/o/token/`
+  - Userinfo: `https://auth.namgun.or.kr/application/o/userinfo/`
+  - End Session: `https://auth.namgun.or.kr/application/o/portal/end-session/`
+- **Redirect URI**: `https://namgun.or.kr/api/auth/callback`
+- **PKCE 저장**: `portal_pkce` 쿠키 (httponly, secure, samesite=lax, max_age=600)
+- **세션 쿠키**: `portal_session` (httponly, secure, samesite=lax, 7일 유효)
+
+### 7.4 사용자 모델 (User)
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| id | UUID (String 36) | PK |
+| authentik_sub | String 255 | Authentik subject, unique index |
+| username | String 150 | preferred_username |
+| display_name | String 255 | 표시 이름 (nullable) |
+| email | String 255 | 이메일 (nullable) |
+| avatar_url | String 500 | 아바타 URL (nullable) |
+| is_admin | Boolean | Authentik `authentik Admins` 그룹 소속 여부 |
+| is_active | Boolean | 활성 여부 (기본값: True) |
+| last_login_at | DateTime (tz) | 마지막 로그인 시각 |
+| created_at | DateTime (tz) | 생성 시각 |
+| updated_at | DateTime (tz) | 수정 시각 |
+
+### 7.5 대시보드 서비스 모니터링
+
+- **서비스 수**: 6개 (Authentik, Gitea, RustDesk, Game Panel, Stalwart Mail, BBB)
+- **헬스체크 주기**: 60초 (백그라운드 태스크)
+- **체크 방식**: HTTP GET (상태코드 < 400 → ok) 또는 TCP 포트 체크 (RustDesk)
+- **인메모리 캐시**: `_cache` 리스트, 프론트엔드에서 `/api/services/` 로 조회
+- **ServiceCard**: 서비스명, 상태 뱃지 (ok/down/checking), 응답 시간(ms), 외부 URL 링크
+
+### 7.6 NFS 마운트 (파일 스토리지)
+
+- **NFS 서버**: OMV (192.168.0.100), `/export/root` (fsid=0)
+- **Docker NFS 볼륨**: `portal-storage` → 컨테이너 내 `/storage`
+- **마운트 옵션**: `addr=192.168.0.100,nfsvers=4,rw,hard,noatime,nolock`
+- **클라이언트 디바이스**: `:/portal` (fsid=0이 `/export/root`에 걸리므로)
+
+---
+
+## 8. Phase 4: 파일 브라우저 (완료)
+
+NFS 마운트된 스토리지를 포털 내에서 웹 브라우저로 관리할 수 있는 파일 브라우저를 개발하였다.
+
+### 8.1 NFS 연동 상세
+
+| 항목 | 내용 |
+|------|------|
+| NFS 서버 | OMV (192.168.0.100) |
+| Export 경로 | `/export/root` (fsid=0) |
+| Docker 볼륨 디바이스 | `:/portal` |
+| NFS 버전 | v4.1 (WSL2 커널이 v4.2를 지원하지 않아 v4.1 사용) |
+| 마운트 옵션 | `nfsvers=4,rw,hard,noatime,nolock` |
+| WSL2 패키지 요구사항 | `nfs-common` 설치 필요 |
+
+### 8.2 파일 시스템 구조
+
+```
+/storage/
+├── shared/          ← 공유 폴더 (전체 사용자 읽기, 관리자만 쓰기)
+└── users/
+    └── {user_id}/   ← 개인 폴더 (사용자별 격리)
+```
+
+- **가상 경로 체계**: `my/...` → `/storage/users/{user_id}/...`, `shared/...` → `/storage/shared/...`
+- **관리자 경로**: `users/...` → `/storage/users/...` (전체 사용자 디렉토리 탐색)
+- **경로 보안**: `resolve()` 후 base 경로 접두어 검증으로 path traversal 방지
+
+### 8.3 파일 작업 (API)
+
+| 작업 | 엔드포인트 | 비고 |
+|------|-----------|------|
+| 디렉토리 목록 | GET `/api/files/list` | 가상 경로 기반 |
+| 파일 업로드 | POST `/api/files/upload` | multipart/form-data, 최대 1024MB |
+| 파일 다운로드 | GET `/api/files/download` | StreamingResponse |
+| 파일/폴더 삭제 | DELETE `/api/files/delete` | 관리자 전용 (shared), 본인 폴더는 자유 |
+| 이름 변경 | POST `/api/files/rename` | — |
+| 이동/복사 | POST `/api/files/move` | `copy` 파라미터로 복사 지원 |
+| 폴더 생성 | POST `/api/files/mkdir` | — |
+
+### 8.4 프론트엔드 UI
+
+- **Breadcrumb 네비게이션**: 현재 경로를 계층별로 표시, 클릭으로 이동
+- **파일 그리드/리스트 뷰**: 파일명, 크기, 수정일, MIME 타입 표시
+- **사이드바**: my / shared / users(관리자) 루트 탐색
+- **커맨드 바**: 업로드, 새 폴더, 삭제, 이름 변경 등 도구 모음
+- **컨텍스트 메뉴**: 우클릭 메뉴 (다운로드, 이름 변경, 이동, 삭제)
+- **업로드 모달**: 드래그 앤 드롭 또는 파일 선택
+- **프리뷰 모달**: 이미지/텍스트 파일 미리보기
+- **공유 링크 모달**: 외부 공유 링크 생성 (ShareLink 모델, 만료/다운로드 제한)
+
+---
+
+## 9. Phase 5: 서비스 개선 및 메일/회의 통합 (완료)
+
+파일 리스트 캐시, BBB 화상회의 통합, Stalwart Mail iframe 통합, 서비스 카드 개선 및 네비게이션 추가를 완료하였다.
+
+### 9.1 파일 리스트 캐시
+
+- **인메모리 TTL 캐시**: `_dir_cache` (30초 TTL), `_size_cache` (60초 TTL)
+- **캐시 무효화**: 쓰기 작업(upload, delete, rename, move, mkdir) 완료 후 `invalidate_cache()` 호출
+- **asyncio 래핑**: `list_directory()` → `asyncio.to_thread()` 래핑으로 NFS I/O 블로킹 방지
+
+### 9.2 BBB 화상회의 통합
+
+- **서버**: BigBlueButton 3.0 (192.168.0.249)
+- **접속 URL**: https://meet.namgun.or.kr
+- **API 클라이언트**: SHA256 checksum 인증 방식의 BBB API 클라이언트 (`meetings/bbb.py`)
+- **기능**: 회의 생성(create), 목록 조회(getMeetings), 상세 조회(getMeetingInfo), 참여 URL 생성(join), 종료(end), 녹화 조회/삭제(getRecordings/deleteRecordings)
+- **프론트엔드**: MeetingCard, MeetingDetail, CreateMeetingModal, RecordingList 컴포넌트
+- **라우터**: `/api/meetings/` (list, create, join, end, recordings)
+
+### 9.3 Stalwart Mail iframe 통합
+
+- **포털 내 접근**: `/mail` 페이지에서 Stalwart 웹 UI를 iframe으로 임베드
+- **Nginx 설정**: `mail.namgun.or.kr.conf`에서 `X-Frame-Options` 대신 `Content-Security-Policy: frame-ancestors 'self' https://namgun.or.kr` 사용
+- **서비스 카드**: `internal_only: True` 설정으로 대시보드에서 외부 링크 비노출
+
+### 9.4 서비스 카드 변경사항
+
+| 서비스 | 변경 사항 |
+|--------|----------|
+| RustDesk | HTTP 헬스체크 → TCP 포트 체크 (`192.168.0.50:21114`) |
+| Pi-Hole | SERVICE_DEFS에서 제거 (포털 대시보드 미노출) |
+| BBB (화상회의) | 신규 추가 (`health_url: https://meet.namgun.or.kr/bigbluebutton/api`, `internal_only: True`) |
+| Stalwart Mail | `internal_only: True` 설정 (iframe 통합으로 외부 링크 불필요) |
+
+### 9.5 네비게이션 추가
+
+AppHeader에 네비게이션 메뉴 추가:
+
+| 메뉴 | 경로 | 설명 |
+|------|------|------|
+| 대시보드 | `/` | 서비스 상태 대시보드 |
+| 파일 | `/files` | 파일 브라우저 |
+| 메일 | `/mail` | Stalwart Mail iframe |
+| 회의 | `/meetings` | BBB 회의 관리 |
+
+모바일 반응형 네비게이션 (햄버거 메뉴) 포함.
+
+---
+
+## 10. Phase 6: 네이티브 로그인 및 SSO 통합 (완료)
+
+Authentik 리다이렉트 방식의 로그인을 네이티브 로그인 폼으로 대체하고, Popup Bridge 패턴을 통해 SSO 쿠키를 설정하며, Gitea 연동 SSO를 구현하였다.
+
+### 10.1 네이티브 로그인 폼
+
+- **페이지**: `/login` (auth 레이아웃)
+- **입력 필드**: 사용자명/이메일, 비밀번호
+- **리다이렉트 파라미터**: `?redirect=<URL>` 쿼리 파라미터 지원 (외부 서비스 SSO용)
+- **보안**: `namgun.or.kr` 도메인 또는 상대 경로만 리다이렉트 허용
+
+### 10.2 Popup Bridge 패턴
+
+기존 Authentik 전체 화면 리다이렉트 방식은 UX가 좋지 않고, iframe 방식은 third-party cookie partitioning(브라우저 보안 정책)으로 인해 SSO 쿠키가 설정되지 않는 문제가 있었다. 이를 해결하기 위해 Popup Bridge 패턴을 도입하였다.
+
+#### 플로우
+
+1. 사용자가 `/login` 페이지에서 사용자명/비밀번호 입력 후 제출
+2. 브라우저가 `https://auth.namgun.or.kr/portal-bridge/` 팝업을 동기적으로 열림 (팝업 차단기 회피)
+3. Bridge 페이지가 `portal-bridge-ready` postMessage 전송
+4. 포털이 OIDC config 조회 + PKCE 생성 후 `portal-login` 메시지를 팝업에 전송
+5. Bridge가 Authentik Flow Executor API를 호출하여 인증 (단계별 stage 처리)
+6. 인증 완료 후 `authorize` 엔드포인트 호출 → `code` 획득
+7. Bridge가 `portal-login-result` 메시지로 코드를 포털에 전달
+8. 포털 백엔드가 `/api/auth/native-callback`에서 코드를 토큰으로 교환, 세션 쿠키 발급
+
+#### PKCE S256 클라이언트 사이드 생성
+
+```typescript
+// code_verifier: 64바이트 랜덤 → base64url
+// code_challenge: SHA-256(code_verifier) → base64url
+```
+
+- `crypto.getRandomValues()` + `crypto.subtle.digest('SHA-256', ...)` 사용
+- 브라우저 측에서 PKCE 쌍 생성 후 `code_verifier`를 팝업에 전달하지 않고 포털에서 보관
+
+#### Bridge 페이지 네비게이션 (SSO 쿠키 설정)
+
+- Popup은 `https://auth.namgun.or.kr` origin에서 실행되므로 Authentik 쿠키가 first-party로 설정됨
+- Flow Executor API 호출 시 Authentik 세션 쿠키가 정상적으로 저장됨
+- Bridge callback 페이지(`/portal-bridge/callback`)에서 `code` 파라미터를 추출하여 opener에 postMessage
+
+### 10.3 백엔드 엔드포인트
+
+| 엔드포인트 | 메서드 | 설명 |
+|-----------|--------|------|
+| `/api/auth/login` | GET | OIDC 리다이렉트 (레거시, PKCE 쿠키 설정) |
+| `/api/auth/callback` | GET | OIDC 콜백 (레거시, 코드 교환 + 세션 설정) |
+| `/api/auth/oidc-config` | GET | 공개 OIDC 설정 반환 (client_id, redirect_uri, scope, flow_slug) |
+| `/api/auth/native-callback` | POST | 네이티브 로그인 코드 교환 (code + code_verifier → 세션 쿠키) |
+| `/api/auth/me` | GET | 현재 인증 사용자 정보 |
+| `/api/auth/logout` | POST | 세션 쿠키 삭제 |
+
+### 10.4 Authentik Flow Executor API 단계
+
+네이티브 로그인에서 Bridge가 호출하는 Authentik API 흐름:
+
+1. `GET /api/v3/flows/executor/{flow_slug}/` → 첫 번째 stage 정보
+2. `POST /api/v3/flows/executor/{flow_slug}/` (uid_field: username) → identification stage 제출
+3. `POST /api/v3/flows/executor/{flow_slug}/` (password: password) → password stage 제출
+4. 플로우 완료 시 `redirect_to` URL이 반환됨
+5. Bridge가 `redirect_to` 내의 authorize URL을 페이지 네비게이션으로 호출 → SSO 쿠키 설정 + code 발급
+6. Callback 페이지에서 URL의 `code` 파라미터 추출
+
+> **주의**: 플로우 완료 후 `to: "/"` 응답이 오는 경우, authorize 엔드포인트를 수동으로 재호출해야 한다.
+
+### 10.5 Gitea SSO 연동
+
+- **방식**: OAuth2 전용 로그인 (자체 로그인 폼 미노출)
+- **미인증 접근 처리**: Nginx `namgun.or.kr.conf` 또는 `git.namgun.or.kr.conf`에서 미인증 사용자를 포털 로그인 페이지로 리다이렉트 (`?redirect=https://git.namgun.or.kr/user/oauth2/authentik`)
+- **인증 후**: 포털 로그인 완료 → Authentik SSO 쿠키 설정됨 → Gitea OAuth2 버튼 클릭 시 자동 인증 통과
+- **git push HTTP 인증**: BASIC_AUTH가 비활성화되면 git push 인증이 실패하므로, HTTP git 작업을 위해 BASIC_AUTH를 재활성화
+
+### 10.6 로그인 리다이렉트 파라미터
+
+```
+https://namgun.or.kr/login?redirect=https://git.namgun.or.kr/user/oauth2/authentik
+```
+
+- 외부 서비스에서 포털 로그인 페이지로 보낼 때 `redirect` 쿼리 파라미터 사용
+- 로그인 완료 후 해당 URL로 자동 이동
+- 보안: `https://` + `.namgun.or.kr` 도메인 또는 `/` 상대 경로만 허용
+
+---
+
+## 11. 핵심 트러블슈팅 정리
 
 | # | 문제 | 원인 | 해결 방법 |
 |---|------|------|----------|
@@ -328,39 +606,66 @@ postfix, dovecot, amavis, clamav, spamassassin, php-fpm
 | 6 | Authentik 최초 로그인 실패 | BOOTSTRAP_PASSWORD에 `==` 등 특수문자 포함 | 단순 영숫자 비밀번호 사용 |
 | 7 | Authentik 반복 로그인 차단 | reputation score 누적 | `Reputation` 테이블 초기화 |
 | 8 | Gitea CLI 실행 시 권한 오류 | root 사용자로 실행 | `--user git` 옵션으로 git 사용자 지정 |
+| 9 | PostgreSQL bind mount 실패 | WSL2 환경에서 NTFS(/mnt/d/) 파일시스템 권한 문제 | Docker named volume (`portal-db-data`) 사용 |
+| 10 | NFS v4.2 마운트 실패 | WSL2 커널(5.15.x)이 NFS v4.2를 지원하지 않음 | `nfsvers=4` (v4.1) 사용 |
+| 11 | fetch() cross-origin redirect 시 브라우저 hang | OIDC redirect_uri가 다른 origin인 경우 fetch가 무한 대기 | same-origin redirect_uri 사용 (`namgun.or.kr/api/auth/callback`) |
+| 12 | OAuth 파라미터 인코딩 누락 | `encodeURIComponent` 미적용으로 query 파라미터가 깨짐 | `URLSearchParams`를 사용하여 자동 인코딩 |
+| 13 | Authentik 플로우 완료 후 `to: "/"` 응답 | Flow Executor가 authorize가 아닌 기본 경로로 리다이렉트 반환 | authorize 엔드포인트를 수동으로 재호출 |
+| 14 | iframe에서 Authentik 쿠키 미설정 | 브라우저의 third-party cookie partitioning 정책 | iframe 대신 popup 방식으로 전환 (first-party context) |
+| 15 | Bridge-Portal 간 race condition | 팝업이 로드되기 전에 postMessage 전송 | `portal-bridge-ready` 메시지 수신 후 login 메시지 전송 (listener 선설정) |
+| 16 | SSO 쿠키 미설정 (fetch 기반) | fetch/XHR로 authorize를 호출하면 브라우저 쿠키 저장이 안 됨 | 페이지 네비게이션(`window.location.href`) 방식으로 변경 |
+| 17 | Gitea 자동 로그인 안 됨 | 미인증 사용자가 Gitea에 직접 접근 시 포털 세션 없음 | Nginx에서 포털 로그인 페이지로 redirect 룰 추가 (`?redirect=...`) |
+| 18 | git push HTTP 인증 실패 | BASIC_AUTH가 비활성화된 상태 | git HTTP 작업을 위해 BASIC_AUTH 재활성화 |
 
 ---
 
-## 8. 잔여 작업 항목
+## 12. 잔여 작업 항목
 
-### 8.1 즉시 조치 필요
+### 12.1 즉시 조치 필요
 
-- [ ] DKIM `dkim=pass` 확인 (DNS 캐시 만료 후, ~1시간)
+- [x] DKIM `dkim=pass` 확인 (DNS 캐시 만료 후)
 - [ ] PTR 레코드 등록 (SK 브로드밴드, `211.244.144.69 → mail.namgun.or.kr`)
 - [ ] `mail.namgun.or.kr`에 대한 SPF TXT 레코드 추가 (SPF_HELO_NONE 해결)
 - [ ] Authentik 계정 비밀번호 설정: tsha, nahee14, kkb
 
-### 8.2 향후 단계
+### 12.2 완료된 항목
 
-| 단계 | 내용 | 예상 기술 스택 |
+| 항목 | 완료 단계 |
+|------|----------|
+| 포털 코어 개발 (Nuxt 3 + FastAPI) | Phase 3 |
+| 파일 브라우저 (NFS 연동) | Phase 4 |
+| BBB 화상회의 통합 | Phase 5 |
+| Stalwart Mail iframe 통합 | Phase 5 |
+| 네이티브 로그인 폼 | Phase 6 |
+| Popup Bridge SSO | Phase 6 |
+| Gitea SSO 연동 | Phase 6 |
+
+### 12.3 향후 계획
+
+| 항목 | 내용 | 예상 기술 스택 |
 |------|------|---------------|
-| Phase 3 | 포털 코어 개발 | Nuxt 3 (프론트엔드) + FastAPI (백엔드) |
-| Phase 4 | 네이티브 통합 | JMAP (메일), WebDAV (파일), CalDAV (캘린더), CardDAV (연락처) |
-| Phase 5 | 추가 서비스 통합 | BBB Greenlight OIDC, OMV Proxy Auth |
+| 데모 사이트 | demo.namgun.or.kr 공개 데모 환경 구축 | Nuxt 3 + FastAPI (읽기 전용 모드) |
+| Game Panel 포털 통합 | 게임 서버 관리를 포털 내에서 직접 수행 | 포털 API + Game Panel API 연동 |
+| CalDAV / CardDAV | 캘린더/연락처 동기화 | Stalwart 내장 또는 별도 서버 |
+| Naver Works급 ERP | 조직 관리, 결재, 메신저 등 그룹웨어 기능 | 장기 목표 |
 
 ---
 
-## 9. 기술 스택 요약
+## 13. 기술 스택 요약
 
 | 분류 | 기술 |
 |------|------|
 | Identity Provider | Authentik 2025.10.4 |
 | 인증 프로토콜 | OIDC, LDAP, OAuth2 |
+| 포털 프론트엔드 | Nuxt 3, Vue 3, shadcn-vue |
+| 포털 백엔드 | FastAPI, SQLAlchemy 2.0 (async), asyncpg |
 | 리버스 프록시 | Nginx (Rocky Linux 10) |
 | TLS 인증서 | Let's Encrypt (certbot + ACME) |
-| 컨테이너 (Docker) | Authentik, Gitea, RustDesk Pro, Game Panel |
+| 컨테이너 (Docker) | Authentik, Portal (frontend + backend + nginx + PostgreSQL), Gitea, RustDesk Pro, Game Panel |
 | 컨테이너 (Podman) | Stalwart Mail, LDAP Outpost |
 | 메일 서버 | Stalwart Mail Server (RocksDB) |
+| 화상회의 | BigBlueButton 3.0 |
+| 파일 스토리지 | NFS v4.1 (OMV, 192.168.0.100) |
 | Git 호스팅 | Gitea 1.25.4 |
 | DNS | Windows Server DNS, Pi-Hole |
 | 호스트 OS | Windows (WSL2), Rocky Linux 10, Rocky Linux 9.7 |
@@ -368,17 +673,21 @@ postfix, dovecot, amavis, clamav, spamassassin, php-fpm
 
 ---
 
-## 10. 보안 고려사항
+## 14. 보안 고려사항
 
-### 10.1 적용된 보안 정책
+### 14.1 적용된 보안 정책
 
 - ISMS-P 기준 보안 헤더 전 사이트 적용
 - TLS 1.2+ 강제 (HSTS preload)
 - 서버 정보 노출 차단 (`server_tokens off`, `X-Powered-By` / `Server` 헤더 제거)
 - 스캐너/봇 차단 규칙
 - DKIM + SPF + DMARC 이메일 인증 체계
+- PKCE S256 인증 코드 보호 (replay 공격 방지)
+- 서명된 세션 쿠키 (itsdangerous, httponly, secure, samesite=lax)
+- 파일 시스템 path traversal 방지 (resolve + prefix 검증)
+- 리다이렉트 URL 도메인 화이트리스트 (`*.namgun.or.kr`)
 
-### 10.2 계획된 보안 강화
+### 14.2 계획된 보안 강화
 
 - PTR 레코드 등록으로 역방향 DNS 검증 완성
 - CSP(Content-Security-Policy) 헤더 추가 검토
@@ -386,4 +695,4 @@ postfix, dovecot, amavis, clamav, spamassassin, php-fpm
 
 ---
 
-*문서 끝. 최종 갱신: 2026-02-18*
+*문서 끝. 최종 갱신: 2026-02-19*

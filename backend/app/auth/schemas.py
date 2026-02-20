@@ -15,6 +15,6 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class NativeCallbackRequest(BaseModel):
-    code: str
-    code_verifier: str
+class LoginRequest(BaseModel):
+    username: str
+    password: str

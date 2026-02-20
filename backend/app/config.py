@@ -31,9 +31,12 @@ class Settings(BaseSettings):
     bbb_url: str = "https://meet.namgun.or.kr/bigbluebutton/api"
     bbb_secret: str = ""
 
-    # Authentik Native Login
+    # Authentik Server-Side Auth
+    authentik_base_url: str = "https://auth.namgun.or.kr"
     authentik_flow_slug: str = "default-authentication-flow"
-    bridge_redirect_uri: str = "https://auth.namgun.or.kr/portal-bridge/callback"
+
+    # Portal OAuth Provider (for Gitea etc.)
+    oauth_clients_json: str = "{}"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

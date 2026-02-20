@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from app.config import get_settings
 from app.db.session import init_db
 from app.auth.router import router as auth_router
+from app.auth.oauth_provider import router as oauth_router
 from app.services.router import router as services_router
 from app.services.health import run_health_checker
 from app.files.router import router as files_router
@@ -43,6 +44,7 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
+app.include_router(oauth_router)
 app.include_router(services_router)
 app.include_router(files_router)
 app.include_router(mail_router)

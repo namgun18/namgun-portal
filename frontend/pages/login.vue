@@ -12,8 +12,11 @@ const submitting = ref(false)
 // Redirect destination after login (from query param or default to dashboard)
 const redirectTo = computed(() => {
   const r = route.query.redirect as string | undefined
-  // Only allow https URLs from our domain or relative paths
-  if (r && (r.startsWith('https://') && r.includes('.namgun.or.kr'))) return r
+  if (!r) return '/'
+  // Allow relative paths (e.g. /oauth/authorize?...)
+  if (r.startsWith('/')) return r
+  // Allow HTTPS URLs from our domain
+  if (r.startsWith('https://') && r.includes('.namgun.or.kr')) return r
   return '/'
 })
 
@@ -21,7 +24,7 @@ const redirectTo = computed(() => {
 watch(user, (u) => {
   if (u) {
     const dest = redirectTo.value
-    if (dest.startsWith('https://')) {
+    if (dest.startsWith('https://') || dest.startsWith('/oauth/')) {
       window.location.href = dest
     } else {
       navigateTo(dest)
@@ -39,17 +42,20 @@ async function handleSubmit() {
   try {
     await nativeLogin(username.value.trim(), password.value)
     const dest = redirectTo.value
-    if (dest.startsWith('https://')) {
+    if (dest.startsWith('https://') || dest.startsWith('/oauth/')) {
       window.location.href = dest
     } else {
       navigateTo(dest)
     }
   } catch (e: any) {
-    const msg = e?.message || e?.data?.detail || ''
-    if (e?.statusCode === 401 || e?.status === 401 || msg.includes('authenticate') || msg.includes('Invalid')) {
+    const detail = e?.data?.detail || ''
+    const statusCode = e?.statusCode || e?.status || 0
+    if (detail) {
+      error.value = detail
+    } else if (statusCode === 401) {
       error.value = '사용자명 또는 비밀번호가 올바르지 않습니다.'
-    } else if (msg.includes('timeout') || msg.includes('Timeout')) {
-      error.value = '로그인 서버 응답 시간이 초과되었습니다.'
+    } else if (statusCode === 502) {
+      error.value = '인증 서버에 연결할 수 없습니다.'
     } else {
       error.value = '로그인 중 오류가 발생했습니다. 다시 시도해주세요.'
     }

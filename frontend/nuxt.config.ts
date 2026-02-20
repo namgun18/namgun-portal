@@ -26,10 +26,14 @@ export default defineNuxtConfig({
   // SSR 모드 (서버사이드 렌더링)
   ssr: true,
 
-  // /api/** → FastAPI 백엔드 프록시
+  // /api/**, /oauth/** → FastAPI 백엔드 프록시
   nitro: {
     devProxy: {
       '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/oauth': {
         target: 'http://localhost:8000',
         changeOrigin: true,
       },

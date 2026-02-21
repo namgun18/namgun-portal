@@ -76,6 +76,7 @@ def _parse_recording(r: dict) -> Recording:
     return Recording(
         recordID=r.get("recordID", ""),
         meetingID=r.get("meetingID", ""),
+        internalMeetingID=r.get("internalMeetingID", ""),
         name=r.get("name", ""),
         state=r.get("state", ""),
         startTime=str(r.get("startTime", "")),
@@ -116,6 +117,7 @@ async def get_meeting(meeting_id: str, user: User = Depends(get_current_user)):
         startTime=str(info.get("startTime", "")),
         moderatorPW=info.get("moderatorPW", ""),
         attendeePW=info.get("attendeePW", ""),
+        internalMeetingID=info.get("internalMeetingID", ""),
     )
 
 

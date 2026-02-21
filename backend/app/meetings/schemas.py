@@ -25,6 +25,7 @@ class MeetingDetail(Meeting):
     startTime: str = ""
     moderatorPW: str = ""
     attendeePW: str = ""
+    internalMeetingID: str = ""
 
 
 class CreateMeetingRequest(BaseModel):
@@ -44,6 +45,7 @@ class JoinMeetingResponse(BaseModel):
 class Recording(BaseModel):
     recordID: str
     meetingID: str
+    internalMeetingID: str = ""
     name: str = ""
     state: str = ""
     startTime: str = ""

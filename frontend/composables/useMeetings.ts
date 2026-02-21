@@ -20,6 +20,7 @@ export interface MeetingDetail extends Meeting {
   startTime: string
   moderatorPW: string
   attendeePW: string
+  internalMeetingID: string
 }
 
 export interface CreateMeetingRequest {
@@ -35,6 +36,7 @@ export interface CreateMeetingRequest {
 export interface Recording {
   recordID: string
   meetingID: string
+  internalMeetingID: string
   name: string
   state: string
   startTime: string
@@ -51,6 +53,8 @@ const loadingMeetings = ref(false)
 const loadingDetail = ref(false)
 const loadingRecordings = ref(false)
 const showCreateModal = ref(false)
+const analyticsUrl = ref<string | null>(null)
+const analyticsTitle = ref('')
 
 export function useMeetings() {
   async function fetchMeetings() {
@@ -119,6 +123,16 @@ export function useMeetings() {
     await fetchRecordings()
   }
 
+  function openAnalytics(internalMeetingID: string, name: string) {
+    analyticsUrl.value = `https://meet.namgun.or.kr/learning-analytics-dashboard/?meeting=${internalMeetingID}&lang=ko-KR`
+    analyticsTitle.value = name || '회의 분석'
+  }
+
+  function closeAnalytics() {
+    analyticsUrl.value = null
+    analyticsTitle.value = ''
+  }
+
   function clearSelectedMeeting() {
     selectedMeeting.value = null
   }
@@ -132,6 +146,8 @@ export function useMeetings() {
     loadingDetail: readonly(loadingDetail),
     loadingRecordings: readonly(loadingRecordings),
     showCreateModal,
+    analyticsUrl: readonly(analyticsUrl),
+    analyticsTitle: readonly(analyticsTitle),
     // Actions
     fetchMeetings,
     fetchMeetingDetail,
@@ -140,6 +156,8 @@ export function useMeetings() {
     endMeeting,
     fetchRecordings,
     deleteRecording,
+    openAnalytics,
+    closeAnalytics,
     clearSelectedMeeting,
   }
 }

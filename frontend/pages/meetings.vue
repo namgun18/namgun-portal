@@ -15,12 +15,16 @@ const {
   loadingDetail,
   loadingRecordings,
   showCreateModal,
+  analyticsUrl,
+  analyticsTitle,
   fetchMeetings,
   fetchMeetingDetail,
   joinMeeting,
   endMeeting,
   fetchRecordings,
   deleteRecording,
+  openAnalytics,
+  closeAnalytics,
   clearSelectedMeeting,
 } = useMeetings()
 
@@ -68,7 +72,33 @@ async function refresh() {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+  <!-- 학습 분석 대시보드 (iframe) -->
+  <div v-if="analyticsUrl" class="flex flex-col h-[calc(100vh-3.5rem)]">
+    <div class="flex items-center justify-between px-4 py-1.5 border-b bg-background">
+      <div class="flex items-center gap-2 min-w-0">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-primary shrink-0">
+          <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
+        </svg>
+        <span class="text-sm font-medium truncate">{{ analyticsTitle }}</span>
+      </div>
+      <button
+        @click="closeAnalytics"
+        class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border hover:bg-accent transition-colors"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
+          <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
+        </svg>
+        녹화 목록으로
+      </button>
+    </div>
+    <iframe
+      :src="analyticsUrl"
+      class="flex-1 w-full border-0"
+    />
+  </div>
+
+  <!-- 기존 회의/녹화 UI -->
+  <div v-else class="flex h-[calc(100vh-3.5rem)] overflow-hidden">
     <!-- Main content -->
     <div class="flex-1 flex flex-col min-w-0">
       <!-- Command bar -->
@@ -178,6 +208,7 @@ async function refresh() {
             :loading="loadingRecordings"
             :is-admin="isAdmin"
             @delete="handleDeleteRecording"
+            @analytics="openAnalytics"
           />
         </div>
       </div>

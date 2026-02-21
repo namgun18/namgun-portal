@@ -9,6 +9,7 @@ defineProps<{
 
 const emit = defineEmits<{
   delete: [recordId: string]
+  analytics: [internalMeetingID: string, name: string]
 }>()
 
 function formatSize(bytes: number): string {
@@ -80,6 +81,17 @@ function formatTime(ts: string): string {
             </svg>
             재생
           </a>
+          <button
+            v-if="rec.internalMeetingID"
+            @click="emit('analytics', rec.internalMeetingID, rec.name || rec.meetingID)"
+            class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border hover:bg-accent transition-colors"
+            title="학습 분석"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
+              <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+            분석
+          </button>
           <button
             v-if="isAdmin"
             @click="emit('delete', rec.recordID)"

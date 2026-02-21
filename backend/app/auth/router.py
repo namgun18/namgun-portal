@@ -1,4 +1,4 @@
-"""Auth API routes: server-side login, OIDC fallback, me, logout."""
+"""Auth API routes: server-side login, OIDC fallback, me, logout, register, profile."""
 
 import secrets
 from datetime import datetime, timezone
@@ -27,7 +27,22 @@ from app.auth.oidc import (
     get_userinfo,
     server_side_authenticate,
 )
-from app.auth.schemas import LoginRequest, UserResponse
+from app.auth.schemas import (
+    ChangePasswordRequest,
+    ForgotPasswordRequest,
+    LoginRequest,
+    ProfileUpdateRequest,
+    RegisterRequest,
+    UserResponse,
+)
+from app.auth.authentik_admin import (
+    AuthentikAdminError,
+    create_user as authentik_create_user,
+    get_recovery_link,
+    lookup_pk_by_username,
+    set_password as authentik_set_password,
+    update_user as authentik_update_user,
+)
 
 settings = get_settings()
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -81,6 +96,23 @@ def _session_response(user: User, body: dict | None = None) -> JSONResponse:
         path="/",
     )
     return response
+
+
+# ── Helper: get Authentik PK (resolve + cache if missing) ────
+
+
+async def _get_authentik_pk(user: User, db: AsyncSession | None = None) -> int:
+    """Get Authentik numeric PK from user, resolving by username if not cached."""
+    if user.authentik_pk:
+        return user.authentik_pk
+    # Resolve by username and cache
+    pk = await lookup_pk_by_username(user.username)
+    if not pk:
+        raise HTTPException(status_code=404, detail="Authentik 사용자를 찾을 수 없습니다")
+    if db:
+        user.authentik_pk = pk
+        await db.commit()
+    return pk
 
 
 # ── POST /api/auth/login — server-side (primary) ────────────
@@ -179,3 +211,161 @@ async def logout():
     response = JSONResponse(content={"status": "ok"})
     response.delete_cookie(SESSION_COOKIE, path="/")
     return response
+
+
+# ── POST /api/auth/register — 회원가입 ──────────────────────
+
+
+@router.post("/register", status_code=201)
+async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    """Register a new user (pending admin approval)."""
+    email = f"{body.username}@namgun.or.kr"
+
+    # Check if username already exists in portal DB
+    result = await db.execute(select(User).where(User.username == body.username))
+    if result.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="이미 사용 중인 사용자명입니다")
+
+    # Create user in Authentik (is_active=False)
+    try:
+        authentik_user = await authentik_create_user(
+            username=body.username,
+            email=email,
+            name=body.display_name,
+            password=body.password,
+            recovery_email=body.recovery_email,
+        )
+    except AuthentikAdminError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+    # Create portal DB record (uid = OIDC sub, pk = Admin API ID)
+    user = User(
+        authentik_sub=authentik_user["uid"],
+        authentik_pk=authentik_user["pk"],
+        username=body.username,
+        display_name=body.display_name,
+        email=email,
+        recovery_email=body.recovery_email,
+        is_active=False,
+    )
+    db.add(user)
+    await db.commit()
+
+    return {"message": "가입 신청이 완료되었습니다. 관리자 승인 후 이용 가능합니다."}
+
+
+# ── PATCH /api/auth/profile — 프로필 수정 ────────────────────
+
+
+@router.patch("/profile")
+async def update_profile(
+    body: ProfileUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update display name and/or recovery email."""
+    authentik_fields: dict = {}
+
+    if body.display_name is not None:
+        user.display_name = body.display_name
+        authentik_fields["name"] = body.display_name
+
+    if body.recovery_email is not None:
+        user.recovery_email = body.recovery_email
+        # Update Authentik attributes
+        authentik_fields["attributes"] = {"recovery_email": body.recovery_email}
+
+    if authentik_fields:
+        try:
+            pk = await _get_authentik_pk(user, db)
+            await authentik_update_user(pk, **authentik_fields)
+        except AuthentikAdminError as e:
+            raise HTTPException(status_code=e.status_code, detail=e.message)
+
+    await db.commit()
+    await db.refresh(user)
+    return {"message": "프로필이 수정되었습니다"}
+
+
+# ── POST /api/auth/change-password — 비밀번호 변경 ──────────
+
+
+@router.post("/change-password")
+async def change_password(
+    body: ChangePasswordRequest,
+    user: User = Depends(get_current_user),
+):
+    """Change password (requires current password verification)."""
+    # Verify current password via Authentik Flow Executor
+    try:
+        await server_side_authenticate(user.username, body.current_password)
+    except AuthenticationError:
+        raise HTTPException(
+            status_code=400, detail="현재 비밀번호가 올바르지 않습니다"
+        )
+
+    # Set new password
+    try:
+        pk = await _get_authentik_pk(user)
+        await authentik_set_password(pk, body.new_password)
+    except AuthentikAdminError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+    return {"message": "비밀번호가 변경되었습니다"}
+
+
+# ── POST /api/auth/forgot-password — 비밀번호 찾기 ──────────
+
+
+@router.post("/forgot-password")
+async def forgot_password(
+    body: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)
+):
+    """Send password recovery link to recovery email."""
+    result = await db.execute(
+        select(User).where(User.username == body.username, User.is_active == True)
+    )
+    user = result.scalar_one_or_none()
+
+    # Always return success to prevent username enumeration
+    success_msg = "등록된 복구 이메일로 비밀번호 재설정 링크를 전송했습니다."
+
+    if not user or not user.recovery_email:
+        return {"message": success_msg}
+
+    try:
+        pk = await _get_authentik_pk(user)
+        recovery_link = await get_recovery_link(pk)
+    except AuthentikAdminError:
+        return {"message": success_msg}
+
+    # Send recovery link via Stalwart SMTP
+    try:
+        await _send_recovery_email(user.recovery_email, user.username, recovery_link)
+    except Exception:
+        pass  # Silently fail to prevent info leakage
+
+    return {"message": success_msg}
+
+
+async def _send_recovery_email(
+    to_email: str, username: str, recovery_link: str
+) -> None:
+    """Send recovery email via Stalwart SMTP."""
+    import smtplib
+    from email.mime.text import MIMEText
+
+    msg = MIMEText(
+        f"{username}님, 아래 링크를 클릭하여 비밀번호를 재설정하세요:\n\n"
+        f"{recovery_link}\n\n"
+        f"이 링크는 일정 시간 후 만료됩니다.\n"
+        f"본인이 요청하지 않은 경우 이 메일을 무시하세요.",
+        "plain",
+        "utf-8",
+    )
+    msg["Subject"] = "[namgun.or.kr] 비밀번호 재설정"
+    msg["From"] = f"noreply@namgun.or.kr"
+    msg["To"] = to_email
+
+    with smtplib.SMTP(settings.stalwart_url.replace("http://", "").split(":")[0], 25) as smtp:
+        smtp.send_message(msg)

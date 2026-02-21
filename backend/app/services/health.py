@@ -18,7 +18,7 @@ SERVICE_DEFS = [
     {
         "name": "Gitea",
         "health_url": "http://192.168.0.50:3000/api/v1/version",
-        "external_url": "https://git.namgun.or.kr/user/oauth2/authentik",
+        "external_url": "https://git.namgun.or.kr/user/oauth2/portal",
         "internal_only": False,
     },
     {

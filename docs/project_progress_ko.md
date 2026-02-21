@@ -12,6 +12,7 @@
 |------|------|--------|------|
 | v1.0 | 2026-02-18 | 남기완 | 최초 작성 (Phase 0 ~ Phase 2 완료 기준) |
 | v1.1 | 2026-02-19 | 남기완 | Phase 3 ~ Phase 6 완료 기준 갱신 |
+| v1.2 | 2026-02-21 | 남기완 | Phase 6.5(인증 게이트웨이 전환), Phase 7(회원가입·관리자 패널) 추가 |
 
 ---
 
@@ -39,6 +40,8 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 | Phase 4 | 파일 브라우저 | **완료** | — | NFS 마운트 + 포털 내 파일 관리 UI |
 | Phase 5 | 서비스 개선 및 메일/회의 통합 | **완료** | — | BBB, 메일 iframe, 캐시, 네비게이션 |
 | Phase 6 | 네이티브 로그인 및 SSO 통합 | **완료** | — | 네이티브 로그인 폼, Popup Bridge, Gitea SSO |
+| Phase 6.5 | 중앙 인증 게이트웨이 전환 | **완료** | — | 서버사이드 로그인, 포털 OIDC 제공자, Popup Bridge 제거 |
+| Phase 7 | 회원가입 및 관리자 패널 | **완료** | — | 승인제 회원가입, 프로필·비밀번호 관리, 관리자 패널, 권한 관리 |
 
 ---
 
@@ -594,7 +597,205 @@ https://namgun.or.kr/login?redirect=https://git.namgun.or.kr/user/oauth2/authent
 
 ---
 
-## 11. 핵심 트러블슈팅 정리
+## 11. Phase 6.5: 중앙 인증 게이트웨이 전환 (완료)
+
+Popup Bridge 기반의 인증 방식을 제거하고, 포털 백엔드가 Authentik Flow Executor API를 직접 호출하는 서버사이드 인증으로 전환하였다. 또한 포털이 OIDC 제공자(Provider) 역할을 하여 Gitea 등 외부 서비스에 SSO를 제공하는 구조로 변경하였다.
+
+### 11.1 서버사이드 네이티브 로그인
+
+- **이전 방식**: 프론트엔드에서 Popup Bridge를 통해 Authentik Flow Executor 호출 → 복잡한 팝업 간 메시지 교환
+- **변경 방식**: 프론트엔드 → `POST /api/auth/login` → 백엔드가 Authentik Flow Executor API 직접 호출 → 세션 쿠키 발급
+- **장점**: 팝업 차단기 문제 제거, SSO 쿠키 불필요, 코드 복잡도 대폭 감소
+
+#### 인증 플로우
+
+```
+1. 사용자 → 포털 로그인 폼에 ID/PW 입력
+2. POST /api/auth/login → 백엔드
+3. 백엔드 → Authentik Flow Executor API 호출 (identification → password stage)
+4. Authentik → 플로우 완료 → 백엔드가 OIDC authorize 호출 → 토큰 교환 → userinfo
+5. 백엔드 → 세션 쿠키 발급 → 프론트엔드 로그인 완료
+```
+
+### 11.2 포털 OIDC 제공자 (OAuth2 Provider)
+
+포털이 직접 OIDC 제공자 역할을 하여 Gitea 등 외부 서비스에 SSO를 제공한다.
+
+#### 엔드포인트
+
+| 경로 | 설명 |
+|------|------|
+| `GET /oauth/.well-known/openid-configuration` | OIDC Discovery |
+| `GET /oauth/authorize` | Authorization endpoint (code 발급) |
+| `POST /oauth/token` | Token endpoint (access_token + id_token 발급) |
+| `GET /oauth/userinfo` | Userinfo endpoint |
+
+#### 클라이언트 관리
+
+- `.env`의 `OAUTH_CLIENTS_JSON`에 JSON 형태로 정의
+- 현재 등록 클라이언트: `portal-gitea` (Gitea SSO용)
+- `redirect_uris` 화이트리스트 검증
+- PKCE (S256) 지원
+
+#### id_token (JWT)
+
+토큰 응답에 OpenID Connect 표준 `id_token`을 포함한다:
+
+```json
+{
+  "iss": "https://namgun.or.kr",
+  "sub": "<user_id>",
+  "aud": "<client_id>",
+  "preferred_username": "namgun18",
+  "name": "Kiwan Nam",
+  "email": "namgun18@namgun.or.kr",
+  "groups": ["admin"],
+  "nonce": "...",
+  "iat": ...,
+  "exp": ...
+}
+```
+
+### 11.3 Gitea SSO 전환
+
+- **이전**: Gitea → Authentik OIDC (직접 연동)
+- **변경**: Gitea → 포털 OIDC 제공자 (포털 세션 기반 SSO)
+- **OAuth 소스 변경**: `gitea admin auth add-oauth --name portal --provider openidConnect --auto-discover-url https://namgun.or.kr/oauth/.well-known/openid-configuration`
+- **Gitea 대시보드 링크**: `/user/oauth2/portal` (기존 `/user/oauth2/authentik`에서 변경)
+
+### 11.4 제거된 코드
+
+- Popup Bridge 프론트엔드 (`bridge-login.ts`)
+- Authentik Bridge 페이지 (`/portal-bridge/`)
+- `POST /api/auth/native-callback` (Popup 전용 콜백)
+- `GET /api/auth/oidc-config` (Popup 전용 설정)
+
+---
+
+## 12. Phase 7: 회원가입 및 관리자 패널 (완료)
+
+승인제 회원가입, 프로필 관리, 비밀번호 변경/찾기, 관리자 사용자 관리 및 권한 할당 기능을 구현하였다.
+
+### 12.1 Authentik Admin API 클라이언트
+
+Authentik Admin API를 래핑하는 httpx 기반 비동기 클라이언트를 개발하였다.
+
+**파일**: `backend/app/auth/authentik_admin.py`
+
+| 함수 | Authentik API | 설명 |
+|------|--------------|------|
+| `create_user()` | `POST /api/v3/core/users/` + `set_password` + `add_user` | 비활성 사용자 생성 + 비밀번호 설정 + Users 그룹 추가 |
+| `activate_user(pk)` | `PATCH /api/v3/core/users/{pk}/` | 사용자 활성화 (관리자 승인) |
+| `deactivate_user(pk)` | `PATCH /api/v3/core/users/{pk}/` | 사용자 비활성화 |
+| `update_user(pk, **fields)` | `PATCH /api/v3/core/users/{pk}/` | 사용자 정보 수정 |
+| `set_password(pk, password)` | `POST /api/v3/core/users/{pk}/set_password/` | 비밀번호 변경 |
+| `delete_user(pk)` | `DELETE /api/v3/core/users/{pk}/` | 사용자 삭제 |
+| `get_recovery_link(pk)` | `POST /api/v3/core/users/{pk}/recovery/` | 비밀번호 복구 링크 생성 |
+| `lookup_pk_by_username()` | `GET /api/v3/core/users/?username=` | PK 조회 |
+| `add_user_to_group()` | `POST /api/v3/core/groups/{pk}/add_user/` | 그룹 추가 |
+| `remove_user_from_group()` | `POST /api/v3/core/groups/{pk}/remove_user/` | 그룹 제거 |
+
+#### 환경 변수
+
+| 변수 | 용도 |
+|------|------|
+| `AUTHENTIK_API_TOKEN` | Admin API Bearer 토큰 (namgun18 소유) |
+| `AUTHENTIK_USERS_GROUP_PK` | "Users" 그룹 UUID |
+| `AUTHENTIK_ADMINS_GROUP_PK` | "authentik Admins" 그룹 UUID |
+
+### 12.2 승인제 회원가입
+
+#### 회원가입 플로우
+
+```
+1. 사용자 → /register 페이지에서 정보 입력
+   (사용자명, 비밀번호, 표시 이름, 복구 이메일)
+2. 이메일 자동 생성: {username}@namgun.or.kr
+3. Authentik API → 사용자 생성 (is_active=False)
+4. 포털 DB → User 레코드 생성 (is_active=False)
+5. "가입 신청 완료, 관리자 승인 후 이용 가능" 안내
+6. 관리자가 /admin/users 페이지에서 승인
+7. Authentik → is_active=True, 포털 DB → is_active=True
+8. → LDAP Outpost 자동 동기화 → Stalwart 메일 사용 가능
+```
+
+#### 검증 규칙
+
+| 필드 | 규칙 |
+|------|------|
+| 사용자명 | 영문소문자+숫자+점/하이픈, 3~30자 |
+| 비밀번호 | 최소 8자 |
+| 복구 이메일 | `@namgun.or.kr` 차단 (외부 이메일만 허용) |
+
+#### Authentik UID vs PK 문제
+
+- OIDC `sub` = Authentik `uid` (SHA256 해시 문자열)
+- Admin API = 숫자 `pk`
+- 포털 DB에 `authentik_sub` (uid)와 `authentik_pk` (숫자) 두 필드를 별도 저장
+- 회원가입 시 두 값을 모두 저장하여 이후 Admin API 호출과 OIDC 로그인이 동일 레코드를 참조
+
+### 12.3 프로필 관리
+
+| 엔드포인트 | 설명 |
+|-----------|------|
+| `PATCH /api/auth/profile` | 표시 이름, 복구 이메일 변경 (Authentik + 포털 DB 동기화) |
+| `POST /api/auth/change-password` | 비밀번호 변경 (현재 비밀번호 검증 → Authentik set_password) |
+| `POST /api/auth/forgot-password` | 비밀번호 찾기 (Authentik recovery 링크 생성 → 복구 이메일로 전송) |
+
+- 비밀번호 변경: 현재 비밀번호를 `server_side_authenticate()`로 검증한 후 Authentik API로 변경
+- 비밀번호 찾기: 사용자명 열거 방지를 위해 항상 동일한 성공 메시지 반환
+- 복구 이메일 전송: Stalwart SMTP (port 25) 사용
+
+### 12.4 관리자 사용자 관리
+
+**파일**: `backend/app/admin/router.py`
+
+| 엔드포인트 | 설명 |
+|-----------|------|
+| `GET /api/admin/users` | 전체 사용자 목록 |
+| `GET /api/admin/users/pending` | 승인 대기 목록 |
+| `POST /api/admin/users/{id}/approve` | 가입 승인 (Authentik 활성화 + DB 활성화) |
+| `POST /api/admin/users/{id}/reject` | 가입 거절 (Authentik + DB 삭제) |
+| `POST /api/admin/users/{id}/deactivate` | 사용자 비활성화 |
+| `POST /api/admin/users/{id}/set-role` | 관리자 권한 부여/해제 |
+
+- 모든 엔드포인트는 `require_admin` 의존성으로 `is_admin` 검증
+- `set-role`: Authentik "authentik Admins" 그룹에 add/remove + 포털 DB `is_admin` 동기화
+- 자기보호: 자신의 권한 변경, 자기 비활성화 차단
+
+### 12.5 관리자 권한 관리
+
+- **관리자 그룹**: Authentik "authentik Admins" (`AUTHENTIK_ADMINS_GROUP_PK`)
+- **권한 부여**: `add_user_to_group(user_pk, admins_group_pk)` → 포털 DB `is_admin=True`
+- **권한 해제**: `remove_user_from_group(user_pk, admins_group_pk)` → 포털 DB `is_admin=False`
+- **로그인 시 동기화**: OIDC userinfo의 `groups`에 `authentik Admins` 포함 여부로 `is_admin` 갱신
+
+### 12.6 프론트엔드 페이지
+
+| 페이지 | 경로 | 설명 |
+|--------|------|------|
+| 회원가입 | `/register` | 사용자명(+`@namgun.or.kr` 미리보기), 비밀번호, 표시 이름, 복구 이메일 |
+| 비밀번호 찾기 | `/forgot-password` | 사용자명 입력 → 복구 이메일로 링크 전송 |
+| 프로필 | `/profile` | 사용자 정보(읽기전용) + 표시 이름/복구 이메일 수정 + 비밀번호 변경 |
+| 관리자 패널 | `/admin/users` | 승인 대기 탭 + 전체 사용자 탭 (승인/거절/비활성화/권한 토글) |
+
+### 12.7 DB 모델 변경
+
+User 모델에 다음 필드 추가:
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `authentik_pk` | Integer (nullable) | Authentik Admin API 숫자 PK |
+| `recovery_email` | String 255 (nullable) | 외부 복구 이메일 (비밀번호 찾기용) |
+
+### 12.8 ISMS-P 보안 조치
+
+- **akadmin 기본 계정 비활성화**: Authentik 기본 관리자 계정(akadmin)을 비활성화하고, `namgun18` 계정으로 Admin API 토큰을 재발급
+- **API 토큰 소유자 변경**: akadmin → namgun18 (pk=5)
+
+---
+
+## 13. 핵심 트러블슈팅 정리
 
 | # | 문제 | 원인 | 해결 방법 |
 |---|------|------|----------|
@@ -616,19 +817,23 @@ https://namgun.or.kr/login?redirect=https://git.namgun.or.kr/user/oauth2/authent
 | 16 | SSO 쿠키 미설정 (fetch 기반) | fetch/XHR로 authorize를 호출하면 브라우저 쿠키 저장이 안 됨 | 페이지 네비게이션(`window.location.href`) 방식으로 변경 |
 | 17 | Gitea 자동 로그인 안 됨 | 미인증 사용자가 Gitea에 직접 접근 시 포털 세션 없음 | Nginx에서 포털 로그인 페이지로 redirect 룰 추가 (`?redirect=...`) |
 | 18 | git push HTTP 인증 실패 | BASIC_AUTH가 비활성화된 상태 | git HTTP 작업을 위해 BASIC_AUTH 재활성화 |
+| 19 | `recovery_email` 컬럼 누락 (500 오류) | `create_all()`은 기존 테이블에 컬럼 추가 불가 | `ALTER TABLE users ADD COLUMN` 수동 실행 |
+| 20 | `authentik_sub` 불일치 (중복 레코드) | 회원가입 시 Authentik PK(정수)를 `authentik_sub`에 저장, OIDC 로그인은 uid(해시) 저장 | `authentik_pk` 별도 컬럼 추가, `authentik_sub`에는 uid만 저장 |
+| 21 | Gitea OAuth `id_token` 누락 | 포털 OIDC 토큰 응답에 `id_token`이 없음 | 토큰 엔드포인트에 JWT `id_token` 추가 |
+| 22 | Gitea OAuth `redirect_uri` 불일치 | `.env`에 `/callback` 누락 | `redirect_uris`에 `/user/oauth2/portal/callback` 전체 경로 등록 |
 
 ---
 
-## 12. 잔여 작업 항목
+## 14. 잔여 작업 항목
 
-### 12.1 즉시 조치 필요
+### 14.1 즉시 조치 필요
 
 - [x] DKIM `dkim=pass` 확인 (DNS 캐시 만료 후)
 - [ ] PTR 레코드 등록 (SK 브로드밴드, `211.244.144.69 → mail.namgun.or.kr`)
 - [ ] `mail.namgun.or.kr`에 대한 SPF TXT 레코드 추가 (SPF_HELO_NONE 해결)
 - [ ] Authentik 계정 비밀번호 설정: tsha, nahee14, kkb
 
-### 12.2 완료된 항목
+### 14.2 완료된 항목
 
 | 항목 | 완료 단계 |
 |------|----------|
@@ -639,19 +844,27 @@ https://namgun.or.kr/login?redirect=https://git.namgun.or.kr/user/oauth2/authent
 | 네이티브 로그인 폼 | Phase 6 |
 | Popup Bridge SSO | Phase 6 |
 | Gitea SSO 연동 | Phase 6 |
+| 서버사이드 네이티브 로그인 전환 | Phase 6.5 |
+| 포털 OIDC 제공자 (Gitea SSO) | Phase 6.5 |
+| 승인제 회원가입 | Phase 7 |
+| 프로필/비밀번호 관리 | Phase 7 |
+| 관리자 사용자 관리 패널 | Phase 7 |
+| 관리자 권한 할당 (RBAC) | Phase 7 |
+| akadmin 기본 계정 비활성화 (ISMS-P) | Phase 7 |
 
-### 12.3 향후 계획
+### 14.3 향후 계획
 
 | 항목 | 내용 | 예상 기술 스택 |
 |------|------|---------------|
-| 데모 사이트 | demo.namgun.or.kr 공개 데모 환경 구축 | Nuxt 3 + FastAPI (읽기 전용 모드) |
+| MFA 추가 | Authentik MFA 플로우 연동 + 포털 UI에서 challenge 처리 | Authentik Flow Executor + TOTP/WebAuthn |
 | Game Panel 포털 통합 | 게임 서버 관리를 포털 내에서 직접 수행 | 포털 API + Game Panel API 연동 |
 | CalDAV / CardDAV | 캘린더/연락처 동기화 | Stalwart 내장 또는 별도 서버 |
+| 데모 사이트 | demo.namgun.or.kr 공개 데모 환경 구축 | Nuxt 3 + FastAPI (읽기 전용 모드) |
 | Naver Works급 ERP | 조직 관리, 결재, 메신저 등 그룹웨어 기능 | 장기 목표 |
 
 ---
 
-## 13. 기술 스택 요약
+## 15. 기술 스택 요약
 
 | 분류 | 기술 |
 |------|------|
@@ -673,9 +886,9 @@ https://namgun.or.kr/login?redirect=https://git.namgun.or.kr/user/oauth2/authent
 
 ---
 
-## 14. 보안 고려사항
+## 16. 보안 고려사항
 
-### 14.1 적용된 보안 정책
+### 16.1 적용된 보안 정책
 
 - ISMS-P 기준 보안 헤더 전 사이트 적용
 - TLS 1.2+ 강제 (HSTS preload)
@@ -687,7 +900,7 @@ https://namgun.or.kr/login?redirect=https://git.namgun.or.kr/user/oauth2/authent
 - 파일 시스템 path traversal 방지 (resolve + prefix 검증)
 - 리다이렉트 URL 도메인 화이트리스트 (`*.namgun.or.kr`)
 
-### 14.2 계획된 보안 강화
+### 16.2 계획된 보안 강화
 
 - PTR 레코드 등록으로 역방향 DNS 검증 완성
 - CSP(Content-Security-Policy) 헤더 추가 검토
@@ -695,4 +908,4 @@ https://namgun.or.kr/login?redirect=https://git.namgun.or.kr/user/oauth2/authent
 
 ---
 
-*문서 끝. 최종 갱신: 2026-02-19*
+*문서 끝. 최종 갱신: 2026-02-21*

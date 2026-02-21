@@ -16,10 +16,12 @@ class User(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     authentik_sub: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    authentik_pk: Mapped[int | None] = mapped_column(Integer, nullable=True)
     username: Mapped[str] = mapped_column(String(150))
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    recovery_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column(

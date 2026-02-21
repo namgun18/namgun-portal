@@ -97,6 +97,7 @@ async def authorize(
     redirect_uri: str,
     state: str = "",
     scope: str = "openid",
+    nonce: str | None = None,
     code_challenge: str | None = None,
     code_challenge_method: str | None = None,
     portal_session: str | None = Cookie(None),
@@ -144,6 +145,7 @@ async def authorize(
             redirect_uri=redirect_uri,
             scope=scope,
             code_challenge=code_challenge,
+            nonce=nonce,
             expires_at=time.time() + CODE_TTL,
         ),
     )
@@ -160,7 +162,7 @@ async def authorize(
 
 
 @router.post("/token")
-async def token(request: Request):
+async def token(request: Request, db: AsyncSession = Depends(get_db)):
     # Parse body (form-encoded per OAuth spec)
     form = await request.form()
     data = dict(form)
@@ -208,11 +210,30 @@ async def token(request: Request):
 
     access_token = _create_access_token(auth_code.user_id)
 
+    # Build id_token (OpenID Connect)
+    now = int(time.time())
+    user = await db.get(User, auth_code.user_id)
+    id_claims = {
+        "iss": settings.app_url,
+        "sub": auth_code.user_id,
+        "aud": client_id,
+        "iat": now,
+        "exp": now + ACCESS_TOKEN_TTL,
+        "preferred_username": user.username if user else "",
+        "name": (user.display_name or user.username) if user else "",
+        "email": user.email if user else "",
+        "groups": ["admin"] if user and user.is_admin else [],
+    }
+    if auth_code.nonce:
+        id_claims["nonce"] = auth_code.nonce
+    id_token = jwt.encode(id_claims, settings.secret_key, algorithm=JWT_ALGORITHM)
+
     return JSONResponse(
         content={
             "access_token": access_token,
             "token_type": "Bearer",
             "expires_in": ACCESS_TOKEN_TTL,
+            "id_token": id_token,
         }
     )
 

@@ -12,6 +12,7 @@
 |---------|------|--------|-------|
 | v1.0 | 2026-02-18 | 남기완 | Initial release (Phase 0 through Phase 2 complete) |
 | v1.1 | 2026-02-19 | 남기완 | Updated through Phase 3 – Phase 6 completion |
+| v1.2 | 2026-02-21 | 남기완 | Added Phase 6.5 (Auth Gateway) and Phase 7 (Registration & Admin Panel) |
 
 ---
 
@@ -39,6 +40,8 @@ The namgun.or.kr Integrated Portal is a self-hosted, unified platform designed f
 | Phase 4 | File Browser | **Complete** | — | NFS mount + in-portal file management UI |
 | Phase 5 | Service Enhancements & Mail/Conferencing Integration | **Complete** | — | BBB, mail iframe, caching, navigation |
 | Phase 6 | Native Login & SSO Integration | **Complete** | — | Native login form, Popup Bridge, Gitea SSO |
+| Phase 6.5 | Central Auth Gateway Transition | **Complete** | — | Server-side login, Portal OIDC Provider, Popup Bridge removal |
+| Phase 7 | Registration & Admin Panel | **Complete** | — | Approval-based registration, profile/password management, admin panel, RBAC |
 
 ---
 
@@ -594,7 +597,139 @@ https://namgun.or.kr/login?redirect=https://git.namgun.or.kr/user/oauth2/authent
 
 ---
 
-## 11. Key Troubleshooting Summary
+## 11. Phase 6.5: Central Auth Gateway Transition (Complete)
+
+The Popup Bridge authentication mechanism was removed and replaced with server-side authentication where the portal backend directly calls the Authentik Flow Executor API. Additionally, the portal now acts as an OIDC Provider to deliver SSO to external services such as Gitea.
+
+### 11.1 Server-Side Native Login
+
+- **Previous**: Frontend Popup Bridge → Authentik Flow Executor → complex inter-window messaging
+- **Current**: Frontend → `POST /api/auth/login` → Backend calls Authentik Flow Executor API directly → session cookie issued
+- **Benefits**: No popup blocker issues, no SSO cookies needed, significantly reduced code complexity
+
+#### Authentication Flow
+
+```
+1. User enters ID/PW on portal login form
+2. POST /api/auth/login → backend
+3. Backend → Authentik Flow Executor API (identification → password stage)
+4. Authentik → flow complete → backend calls OIDC authorize → token exchange → userinfo
+5. Backend → session cookie issued → frontend login complete
+```
+
+### 11.2 Portal OIDC Provider (OAuth2 Provider)
+
+The portal acts as an OIDC Provider to deliver SSO to external services like Gitea.
+
+#### Endpoints
+
+| Path | Description |
+|------|-------------|
+| `GET /oauth/.well-known/openid-configuration` | OIDC Discovery |
+| `GET /oauth/authorize` | Authorization endpoint (code issuance) |
+| `POST /oauth/token` | Token endpoint (access_token + id_token) |
+| `GET /oauth/userinfo` | Userinfo endpoint |
+
+#### Client Management
+
+- Defined as JSON in `.env` `OAUTH_CLIENTS_JSON`
+- Current registered client: `portal-gitea` (for Gitea SSO)
+- `redirect_uris` whitelist validation
+- PKCE (S256) support
+
+### 11.3 Gitea SSO Transition
+
+- **Previous**: Gitea → Authentik OIDC (direct)
+- **Current**: Gitea → Portal OIDC Provider (portal session-based SSO)
+- **OAuth source changed**: `gitea admin auth add-oauth --name portal --provider openidConnect --auto-discover-url https://namgun.or.kr/oauth/.well-known/openid-configuration`
+- **Dashboard link**: `/user/oauth2/portal` (changed from `/user/oauth2/authentik`)
+
+### 11.4 Removed Code
+
+- Popup Bridge frontend (`bridge-login.ts`)
+- Authentik Bridge page (`/portal-bridge/`)
+- `POST /api/auth/native-callback` (popup-only callback)
+- `GET /api/auth/oidc-config` (popup-only config)
+
+---
+
+## 12. Phase 7: Registration & Admin Panel (Complete)
+
+Implemented approval-based registration, profile management, password change/recovery, admin user management, and role assignment features.
+
+### 12.1 Authentik Admin API Client
+
+Developed an httpx-based async client wrapping the Authentik Admin API.
+
+**File**: `backend/app/auth/authentik_admin.py`
+
+| Function | Authentik API | Description |
+|----------|--------------|-------------|
+| `create_user()` | `POST /api/v3/core/users/` + `set_password` + `add_user` | Create inactive user + set password + add to Users group |
+| `activate_user(pk)` | `PATCH /api/v3/core/users/{pk}/` | Activate user (admin approval) |
+| `deactivate_user(pk)` | `PATCH /api/v3/core/users/{pk}/` | Deactivate user |
+| `set_password(pk, password)` | `POST /api/v3/core/users/{pk}/set_password/` | Change password |
+| `delete_user(pk)` | `DELETE /api/v3/core/users/{pk}/` | Delete user |
+| `get_recovery_link(pk)` | `POST /api/v3/core/users/{pk}/recovery/` | Generate password recovery link |
+| `add_user_to_group()` | `POST /api/v3/core/groups/{pk}/add_user/` | Add to group |
+| `remove_user_from_group()` | `POST /api/v3/core/groups/{pk}/remove_user/` | Remove from group |
+
+### 12.2 Approval-Based Registration
+
+#### Registration Flow
+
+```
+1. User enters info on /register page
+   (username, password, display name, recovery email)
+2. Email auto-generated: {username}@namgun.or.kr
+3. Authentik API → create user (is_active=False)
+4. Portal DB → create User record (is_active=False)
+5. "Registration complete, available after admin approval" notice
+6. Admin approves on /admin/users page
+7. Authentik → is_active=True, Portal DB → is_active=True
+8. → LDAP Outpost auto-sync → Stalwart mail becomes available
+```
+
+### 12.3 Profile Management
+
+| Endpoint | Description |
+|----------|-------------|
+| `PATCH /api/auth/profile` | Update display name and recovery email (synced to Authentik + portal DB) |
+| `POST /api/auth/change-password` | Change password (verify current password → Authentik set_password) |
+| `POST /api/auth/forgot-password` | Password recovery (Authentik recovery link → sent to recovery email) |
+
+### 12.4 Admin User Management
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/admin/users` | List all users |
+| `GET /api/admin/users/pending` | List pending approvals |
+| `POST /api/admin/users/{id}/approve` | Approve registration |
+| `POST /api/admin/users/{id}/reject` | Reject registration (delete from Authentik + DB) |
+| `POST /api/admin/users/{id}/deactivate` | Deactivate user |
+| `POST /api/admin/users/{id}/set-role` | Grant/revoke admin role |
+
+- All endpoints require `is_admin` via `require_admin` dependency
+- `set-role`: Authentik "authentik Admins" group add/remove + portal DB `is_admin` sync
+- Self-protection: cannot change own role or deactivate self
+
+### 12.5 Frontend Pages
+
+| Page | Path | Description |
+|------|------|-------------|
+| Registration | `/register` | Username (+`@namgun.or.kr` preview), password, display name, recovery email |
+| Forgot Password | `/forgot-password` | Username input → recovery link sent to recovery email |
+| Profile | `/profile` | User info (readonly) + display name/recovery email edit + password change |
+| Admin Panel | `/admin/users` | Pending tab + all users tab (approve/reject/deactivate/role toggle) |
+
+### 12.6 ISMS-P Security Measures
+
+- **akadmin default account deactivated**: Authentik default admin account (akadmin) deactivated, Admin API token reissued under `namgun18` account
+- **API token ownership change**: akadmin → namgun18
+
+---
+
+## 13. Key Troubleshooting Summary
 
 | # | Problem | Cause | Resolution |
 |---|---------|-------|------------|
@@ -616,19 +751,23 @@ https://namgun.or.kr/login?redirect=https://git.namgun.or.kr/user/oauth2/authent
 | 16 | SSO cookies not set (fetch-based) | Calling authorize via fetch/XHR does not store browser cookies | Switch to page navigation (`window.location.href`) approach |
 | 17 | Gitea automatic login not working | Unauthenticated user accessing Gitea directly has no portal session | Add Nginx redirect rule to portal login page (`?redirect=...`) |
 | 18 | git push HTTP authentication failure | BASIC_AUTH was disabled | Re-enable BASIC_AUTH for HTTP git operations |
+| 19 | `recovery_email` column missing (500 error) | `create_all()` cannot add columns to existing tables | Manual `ALTER TABLE users ADD COLUMN` |
+| 20 | `authentik_sub` mismatch (duplicate records) | Registration stored Authentik PK (integer) as `authentik_sub`, OIDC login stored uid (hash) | Added separate `authentik_pk` column, `authentik_sub` stores uid only |
+| 21 | Gitea OAuth `id_token` missing | Portal OIDC token response lacked `id_token` | Added JWT `id_token` to token endpoint |
+| 22 | Gitea OAuth `redirect_uri` mismatch | `.env` missing `/callback` suffix | Registered full path `/user/oauth2/portal/callback` in `redirect_uris` |
 
 ---
 
-## 12. Remaining Tasks
+## 14. Remaining Tasks
 
-### 12.1 Immediate Action Required
+### 14.1 Immediate Action Required
 
 - [x] Confirm DKIM `dkim=pass` (after DNS cache expiry)
 - [ ] Register PTR record (SK Broadband, `211.244.144.69 → mail.namgun.or.kr`)
 - [ ] Add SPF TXT record for `mail.namgun.or.kr` (resolve SPF_HELO_NONE)
 - [ ] Set Authentik account passwords: tsha, nahee14, kkb
 
-### 12.2 Completed Items
+### 14.2 Completed Items
 
 | Item | Completed Phase |
 |------|----------------|
@@ -639,19 +778,27 @@ https://namgun.or.kr/login?redirect=https://git.namgun.or.kr/user/oauth2/authent
 | Native login form | Phase 6 |
 | Popup Bridge SSO | Phase 6 |
 | Gitea SSO integration | Phase 6 |
+| Server-side native login transition | Phase 6.5 |
+| Portal OIDC Provider (Gitea SSO) | Phase 6.5 |
+| Approval-based registration | Phase 7 |
+| Profile/password management | Phase 7 |
+| Admin user management panel | Phase 7 |
+| Admin role assignment (RBAC) | Phase 7 |
+| akadmin default account deactivation (ISMS-P) | Phase 7 |
 
-### 12.3 Future Plans
+### 14.3 Future Plans
 
 | Item | Description | Expected Technology Stack |
 |------|-------------|--------------------------|
-| Demo site | Build public demo environment at demo.namgun.or.kr | Nuxt 3 + FastAPI (read-only mode) |
+| MFA Integration | Authentik MFA flow + portal UI challenge handling | Authentik Flow Executor + TOTP/WebAuthn |
 | Game Panel portal integration | Manage game servers directly within the portal | Portal API + Game Panel API integration |
 | CalDAV / CardDAV | Calendar/contacts synchronization | Stalwart built-in or separate server |
+| Demo site | Build public demo environment at demo.namgun.or.kr | Nuxt 3 + FastAPI (read-only mode) |
 | Naver Works-grade ERP | Groupware features such as organization management, approvals, and messaging | Long-term objective |
 
 ---
 
-## 13. Technology Stack Summary
+## 15. Technology Stack Summary
 
 | Category | Technology |
 |----------|------------|
@@ -673,9 +820,9 @@ https://namgun.or.kr/login?redirect=https://git.namgun.or.kr/user/oauth2/authent
 
 ---
 
-## 14. Security Considerations
+## 16. Security Considerations
 
-### 14.1 Applied Security Policies
+### 16.1 Applied Security Policies
 
 - ISMS-P compliant security headers applied across all sites
 - TLS 1.2+ enforced (HSTS preload)
@@ -687,7 +834,7 @@ https://namgun.or.kr/login?redirect=https://git.namgun.or.kr/user/oauth2/authent
 - Filesystem path traversal prevention (resolve + prefix verification)
 - Redirect URL domain whitelist (`*.namgun.or.kr`)
 
-### 14.2 Planned Security Enhancements
+### 16.2 Planned Security Enhancements
 
 - Complete reverse DNS verification through PTR record registration
 - Review and addition of CSP (Content-Security-Policy) headers
@@ -695,4 +842,4 @@ https://namgun.or.kr/login?redirect=https://git.namgun.or.kr/user/oauth2/authent
 
 ---
 
-*End of document. Last updated: 2026-02-19*
+*End of document. Last updated: 2026-02-21*

@@ -52,6 +52,14 @@ function toggleDark() {
           >
             회의
           </NuxtLink>
+          <NuxtLink
+            v-if="user.is_admin"
+            to="/admin/users"
+            class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
+            :class="route.path.startsWith('/admin') ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'"
+          >
+            관리
+          </NuxtLink>
         </nav>
       </div>
 
@@ -104,9 +112,22 @@ function toggleDark() {
             <div class="px-3 py-2 text-sm text-muted-foreground border-b">
               {{ user.email }}
             </div>
+            <NuxtLink
+              to="/profile"
+              class="block w-full px-3 py-2 text-sm text-left hover:bg-accent transition-colors"
+            >
+              프로필
+            </NuxtLink>
+            <NuxtLink
+              v-if="user.is_admin"
+              to="/admin/users"
+              class="block w-full px-3 py-2 text-sm text-left hover:bg-accent transition-colors"
+            >
+              사용자 관리
+            </NuxtLink>
             <button
               @click="logout"
-              class="w-full px-3 py-2 text-sm text-left hover:bg-accent transition-colors text-destructive"
+              class="w-full px-3 py-2 text-sm text-left hover:bg-accent transition-colors text-destructive border-t"
             >
               로그아웃
             </button>
@@ -151,6 +172,15 @@ function toggleDark() {
         :class="route.path === '/meetings' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'"
       >
         회의
+      </NuxtLink>
+      <NuxtLink
+        v-if="user.is_admin"
+        to="/admin/users"
+        @click="mobileMenuOpen = false"
+        class="block px-3 py-2 text-sm font-medium rounded-md transition-colors"
+        :class="route.path.startsWith('/admin') ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'"
+      >
+        관리
       </NuxtLink>
     </div>
   </header>

@@ -4,6 +4,7 @@ interface User {
   display_name: string | null
   email: string | null
   avatar_url: string | null
+  recovery_email: string | null
   is_admin: boolean
   last_login_at: string | null
 }
@@ -38,5 +39,55 @@ export const useAuth = () => {
     navigateTo('/login')
   }
 
-  return { user, loading, fetchUser, nativeLogin, logout }
+  const register = async (data: {
+    username: string
+    password: string
+    display_name: string
+    recovery_email: string
+  }): Promise<{ message: string }> => {
+    return await $fetch('/api/auth/register', {
+      method: 'POST',
+      body: data,
+    })
+  }
+
+  const updateProfile = async (data: {
+    display_name?: string
+    recovery_email?: string
+  }): Promise<void> => {
+    await $fetch('/api/auth/profile', {
+      method: 'PATCH',
+      body: data,
+    })
+    await fetchUser()
+  }
+
+  const changePassword = async (
+    currentPassword: string,
+    newPassword: string
+  ): Promise<void> => {
+    await $fetch('/api/auth/change-password', {
+      method: 'POST',
+      body: { current_password: currentPassword, new_password: newPassword },
+    })
+  }
+
+  const forgotPassword = async (username: string): Promise<{ message: string }> => {
+    return await $fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      body: { username },
+    })
+  }
+
+  return {
+    user,
+    loading,
+    fetchUser,
+    nativeLogin,
+    logout,
+    register,
+    updateProfile,
+    changePassword,
+    forgotPassword,
+  }
 }

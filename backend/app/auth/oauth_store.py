@@ -13,6 +13,7 @@ class AuthorizationCode:
     redirect_uri: str
     scope: str
     code_challenge: str | None
+    nonce: str | None
     expires_at: float
 
 

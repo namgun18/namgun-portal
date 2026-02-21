@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     authentik_base_url: str = "https://auth.namgun.or.kr"
     authentik_flow_slug: str = "default-authentication-flow"
 
+    # Authentik Admin API
+    authentik_api_token: str = ""
+    authentik_users_group_pk: str = ""
+    authentik_admins_group_pk: str = ""
+
     # Portal OAuth Provider (for Gitea etc.)
     oauth_clients_json: str = "{}"
 

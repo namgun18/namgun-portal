@@ -93,7 +93,10 @@ async function handleSubmit() {
       </div>
 
       <div>
-        <label for="password" class="block text-sm font-medium mb-1.5">비밀번호</label>
+        <div class="flex items-center justify-between mb-1.5">
+          <label for="password" class="block text-sm font-medium">비밀번호</label>
+          <NuxtLink to="/forgot-password" class="text-xs text-primary hover:underline">비밀번호 찾기</NuxtLink>
+        </div>
         <input
           id="password"
           v-model="password"
@@ -118,6 +121,11 @@ async function handleSubmit() {
         </svg>
         {{ submitting ? '로그인 중...' : '로그인' }}
       </UiButton>
+
+      <p class="text-center text-sm text-muted-foreground">
+        계정이 없으신가요?
+        <NuxtLink to="/register" class="text-primary hover:underline font-medium">회원가입</NuxtLink>
+      </p>
     </form>
 
   </div>

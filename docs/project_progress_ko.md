@@ -13,6 +13,7 @@
 | v1.0 | 2026-02-18 | 남기완 | 최초 작성 (Phase 0 ~ Phase 2 완료 기준) |
 | v1.1 | 2026-02-19 | 남기완 | Phase 3 ~ Phase 6 완료 기준 갱신 |
 | v1.2 | 2026-02-21 | 남기완 | Phase 6.5(인증 게이트웨이 전환), Phase 7(회원가입·관리자 패널) 추가 |
+| v1.3 | 2026-02-21 | 남기완 | Phase 8(BBB 새 탭 회의), Phase 9(Gitea 포털 내재화), Phase 10(대시보드 리뉴얼) 추가 |
 
 ---
 
@@ -25,7 +26,7 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 - 모든 서비스에 대한 SSO 인증 통합 (OIDC / LDAP)
 - ISMS-P 보안 기준에 준하는 인프라 구성
 - 셀프 호스팅 기반의 데이터 주권 확보
-- 단계적 서비스 확장 (Phase 0 ~ Phase 6)
+- 단계적 서비스 확장 (Phase 0 ~ Phase 10)
 
 ---
 
@@ -42,6 +43,9 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 | Phase 6 | 네이티브 로그인 및 SSO 통합 | **완료** | — | 네이티브 로그인 폼, Popup Bridge, Gitea SSO |
 | Phase 6.5 | 중앙 인증 게이트웨이 전환 | **완료** | — | 서버사이드 로그인, 포털 OIDC 제공자, Popup Bridge 제거 |
 | Phase 7 | 회원가입 및 관리자 패널 | **완료** | — | 승인제 회원가입, 프로필·비밀번호 관리, 관리자 패널, 권한 관리 |
+| Phase 8 | BBB 새 탭 회의 참여 | **완료** | — | 새 탭 회의 참여, 자동 닫힘, Greenlight 차단, 학습분석 |
+| Phase 9 | Gitea 포털 내재화 | **완료** | — | 저장소 탐색, 코드 뷰어(구문 강조), 이슈/PR 관리 (v0.5.0) |
+| Phase 10 | 대시보드 홈화면 리뉴얼 | **완료** | — | 8개 위젯, 게임서버 상태, 스토리지 게이지, Git 캐시 (v0.5.1) |
 
 ---
 
@@ -795,9 +799,164 @@ User 모델에 다음 필드 추가:
 
 ---
 
-## 13. 핵심 트러블슈팅 정리
+## 13. Phase 8: BBB 새 탭 회의 참여 (완료)
+
+기존 BBB 화상회의 통합(Phase 5)에서 iframe 기반이었던 회의 참여를 새 탭(팝업) 방식으로 전환하고, 학습분석 대시보드를 추가했다.
+
+### 13.1 새 탭 회의 참여
+
+| 항목 | 내용 |
+|------|------|
+| 방식 | `window.open(joinURL, '_blank')` — 별도 탭에서 회의 참여 |
+| logoutURL | 자동 닫힘 페이지 (`/bbb-close`) → 회의 종료 시 탭 자동 닫힘 |
+| Greenlight 차단 | Nginx에서 BBB의 기본 웹 클라이언트(Greenlight) 직접 접속 차단 |
+
+### 13.2 학습분석 (Learning Analytics)
+
+- BBB 3.0 내장 Learning Analytics Dashboard를 포털 내 iframe으로 통합
+- 회의 중 참여자 통계, 발화 시간, 활동 지표 등 표시
+- 관리자/호스트 전용 접근
+
+### 13.3 프론트엔드 변경
+
+| 파일 | 변경 |
+|------|------|
+| `pages/meetings.vue` | iframe → 새 탭 회의 참여 + 학습분석 iframe 추가 |
+| `pages/bbb-close.vue` | 회의 종료 시 자동 닫힘 페이지 (신규) |
+
+---
+
+## 14. Phase 9: Gitea 포털 내재화 (완료, v0.5.0)
+
+Gitea API를 포털 백엔드에서 래핑하여, 사용자가 포털 내에서 Git 저장소를 탐색하고 코드를 열람하며 이슈/PR을 관리할 수 있도록 구현했다.
+
+### 14.1 백엔드 아키텍처
+
+**파일**: `backend/app/git/` 모듈
+
+| 파일 | 역할 |
+|------|------|
+| `gitea.py` | httpx 기반 Gitea API 클라이언트 (비동기) |
+| `router.py` | FastAPI 라우터 — 13개 엔드포인트 |
+| `schemas.py` | Pydantic 응답 모델 |
+
+### 14.2 API 엔드포인트
+
+| 엔드포인트 | 설명 |
+|-----------|------|
+| `GET /api/git/repos` | 저장소 검색 (페이지네이션, 정렬) |
+| `GET /api/git/repos/{owner}/{repo}` | 저장소 상세 (README 포함) |
+| `GET /api/git/repos/{owner}/{repo}/contents` | 디렉토리 목록 |
+| `GET /api/git/repos/{owner}/{repo}/file` | 파일 내용 (Base64 디코딩) |
+| `GET /api/git/repos/{owner}/{repo}/branches` | 브랜치 목록 |
+| `GET /api/git/repos/{owner}/{repo}/commits` | 커밋 이력 |
+| `GET /api/git/repos/{owner}/{repo}/issues` | 이슈 목록 |
+| `POST /api/git/repos/{owner}/{repo}/issues` | 이슈 생성 |
+| `GET /api/git/repos/{owner}/{repo}/issues/{index}` | 이슈 상세 |
+| `GET /api/git/repos/{owner}/{repo}/issues/{index}/comments` | 이슈 댓글 |
+| `POST /api/git/repos/{owner}/{repo}/issues/{index}/comments` | 댓글 작성 |
+| `GET /api/git/repos/{owner}/{repo}/pulls` | PR 목록 |
+| `GET /api/git/repos/{owner}/{repo}/pulls/{index}` | PR 상세 |
+
+### 14.3 프론트엔드 페이지
+
+| 경로 | 설명 |
+|------|------|
+| `/git` | 저장소 목록 (검색, 정렬, 언어 필터) |
+| `/git/:owner/:repo` | 저장소 상세 — 파일 트리, README 렌더링, 브랜치/커밋/이슈/PR 탭 |
+| `/git/:owner/:repo/blob/:path` | 코드 뷰어 — Shiki 구문 강조, 줄번호, 파일 크기 표시 |
+
+### 14.4 주요 기술 사항
+
+- **Shiki 구문 강조**: 서버사이드 렌더링으로 100+ 언어 지원
+- **Markdown 렌더링**: `markdown-it` + 코드 블록 구문 강조
+- **대용량 파일 처리**: 1MB 초과 파일은 `too_large` 플래그로 미리보기 차단
+- **Base64 디코딩**: Gitea API의 Base64 인코딩 파일 내용을 백엔드에서 디코딩
+
+---
+
+## 15. Phase 10: 대시보드 홈화면 리뉴얼 (완료, v0.5.1)
+
+기존 ServiceGrid(서비스 카드 6장)만 있던 대시보드를 8개 위젯으로 구성된 종합 홈화면으로 리뉴얼했다.
+
+### 15.1 대시보드 레이아웃
+
+```
+┌──────────────────────────────────────────────────┐
+│  인사말 (시간대별) + 날짜/시간                       │
+├──────────────────────────────────────────────────┤
+│ ● 서비스 상태 표시줄 (6개 서비스 헬스체크)            │
+├────────────────────────┬─────────────────────────┤
+│ 최근 메일 (2열)        │ 빠른 바로가기 (1열)      │
+│                        ├─────────────────────────┤
+│                        │ 스토리지 사용량           │
+├────────────────────────┼─────────────────────────┤
+│ 최근 Git 활동 (2열)    │ 진행 중인 회의            │
+│                        ├─────────────────────────┤
+│                        │ 게임서버 상태             │
+└────────────────────────┴─────────────────────────┘
+```
+
+- 데스크톱: 3열 그리드, 모바일: 1열 스택
+- 각 위젯 독립 로딩 스켈레톤
+
+### 15.2 위젯 구성
+
+| 위젯 | 컴포넌트 | 데이터 소스 |
+|------|---------|-----------|
+| 인사말 | `DashboardGreeting.vue` | useAuth (user) |
+| 서비스 상태 | `DashboardServiceStatus.vue` | `/api/services/status` |
+| 최근 메일 | `DashboardRecentMail.vue` | `/api/mail/mailboxes` → `/api/mail/messages` |
+| 최근 Git 활동 | `DashboardRecentGit.vue` | `/api/git/recent-commits` (신규) |
+| 진행 중인 회의 | `DashboardMeetings.vue` | `/api/meetings/` |
+| 게임서버 상태 | `DashboardGameServers.vue` | `/api/dashboard/game-servers` (신규) |
+| 스토리지 | `DashboardStorage.vue` | `/api/files/info` |
+| 빠른 바로가기 | `DashboardShortcuts.vue` | 라우팅만 |
+
+### 15.3 신규 백엔드 API
+
+#### `GET /api/git/recent-commits?limit=5`
+
+- 최근 업데이트된 5개 저장소에서 각 3개 커밋을 **병렬**(`asyncio.gather`)로 가져옴
+- 시간순 정렬 후 최대 20개 캐싱
+- **인메모리 TTL 캐시**: 120초 — 첫 요청만 Gitea API 호출, 이후 캐시 반환
+
+#### `GET /api/dashboard/game-servers`
+
+- Docker 소켓(`/var/run/docker.sock:ro`)으로 `game-panel.managed=true` 라벨 컨테이너 조회
+- **읽기 전용**: 컨테이너 제어 불가, 상태 조회만 수행
+- 실패 시 빈 배열 반환 (graceful fallback)
+
+### 15.4 스토리지 용량 표시 개선
+
+- `shutil.disk_usage()`로 NFS 볼륨 전체 용량/사용량 즉시 조회 (기존 `rglob("*")` 트리 워크 제거)
+- 대시보드: 퍼센트 게이지 바 + 전체 용량 표시
+- 파일 브라우저 사이드바: 동일한 퍼센트 게이지 바 추가
+- 색상 코드: 70% 이하 초록, 70~90% 노랑, 90% 이상 빨강
+
+### 15.5 Stalwart 헬스체크 수정
+
+- Stalwart v0.15에서 `/healthz` → 404 반환 확인
+- `/health/liveness` → 200 반환으로 URL 변경
+- `backend/app/services/health.py` 수정
+
+### 15.6 공통 유틸리티
+
+**파일**: `frontend/lib/date.ts`
+
+| 함수 | 설명 |
+|------|------|
+| `timeAgo(dateStr)` | 상대 시간 표시 (방금 전, N분 전, N시간 전, N일 전) |
+| `formatSize(bytes)` | 바이트 → 사람이 읽을 수 있는 크기 (B, KB, MB, GB, TB) |
+
+---
+
+## 16. 핵심 트러블슈팅 정리
 
 | # | 문제 | 원인 | 해결 방법 |
+| 23 | Git recent-commits 응답 지연 | 50개 저장소를 순차 조회 | 5개로 축소 + asyncio.gather 병렬 + 120초 인메모리 TTL 캐시 |
+| 24 | 스토리지 용량 조회 지연 | `rglob("*")` NFS 트리 워크 | `shutil.disk_usage()` 즉시 조회로 변경 |
+| 25 | Stalwart 헬스체크 항상 실패 | v0.15에서 `/healthz` → 404 | `/health/liveness` (200)로 URL 변경 |
 |---|------|------|----------|
 | 1 | Stalwart v0.15에서 LDAP 인증 실패 | `bind.auth.enable`이 기본적으로 hash 비교 모드 | `bind.auth.method = "lookup"` 설정 |
 | 2 | Stalwart DKIM 서명 키 인식 실패 | 키 네이밍 컨벤션 불일치 | `{algorithm}-{domain}` 형식 사용 (예: `rsa-namgun.or.kr`) |
@@ -824,16 +983,16 @@ User 모델에 다음 필드 추가:
 
 ---
 
-## 14. 잔여 작업 항목
+## 17. 잔여 작업 항목
 
-### 14.1 즉시 조치 필요
+### 17.1 즉시 조치 필요
 
 - [x] DKIM `dkim=pass` 확인 (DNS 캐시 만료 후)
 - [ ] PTR 레코드 등록 (SK 브로드밴드, `211.244.144.69 → mail.namgun.or.kr`)
 - [ ] `mail.namgun.or.kr`에 대한 SPF TXT 레코드 추가 (SPF_HELO_NONE 해결)
 - [ ] Authentik 계정 비밀번호 설정: tsha, nahee14, kkb
 
-### 14.2 완료된 항목
+### 17.2 완료된 항목
 
 | 항목 | 완료 단계 |
 |------|----------|
@@ -851,20 +1010,31 @@ User 모델에 다음 필드 추가:
 | 관리자 사용자 관리 패널 | Phase 7 |
 | 관리자 권한 할당 (RBAC) | Phase 7 |
 | akadmin 기본 계정 비활성화 (ISMS-P) | Phase 7 |
+| BBB 새 탭 회의 참여 + 자동 닫힘 | Phase 8 |
+| Greenlight 직접 접속 차단 | Phase 8 |
+| 학습분석 대시보드 (iframe) | Phase 8 |
+| Gitea API 래핑 (13개 엔드포인트) | Phase 9 |
+| 저장소 탐색 + 코드 뷰어 (Shiki 구문 강조) | Phase 9 |
+| 이슈/PR 관리 | Phase 9 |
+| 대시보드 8개 위젯 리뉴얼 | Phase 10 |
+| 게임서버 상태 조회 (Docker 소켓) | Phase 10 |
+| 스토리지 용량 퍼센트 게이지 | Phase 10 |
+| Git recent-commits 인메모리 캐시 | Phase 10 |
+| Stalwart 헬스체크 URL 수정 | Phase 10 |
 
-### 14.3 향후 계획
+### 17.3 향후 계획
 
 | 항목 | 내용 | 예상 기술 스택 |
 |------|------|---------------|
 | MFA 추가 | Authentik MFA 플로우 연동 + 포털 UI에서 challenge 처리 | Authentik Flow Executor + TOTP/WebAuthn |
-| Game Panel 포털 통합 | 게임 서버 관리를 포털 내에서 직접 수행 | 포털 API + Game Panel API 연동 |
+| Game Panel 포털 통합 | 게임 서버 관리를 포털 내에서 직접 수행 (현재 상태 조회만 완료) | 포털 API + Game Panel API 연동 |
 | CalDAV / CardDAV | 캘린더/연락처 동기화 | Stalwart 내장 또는 별도 서버 |
 | 데모 사이트 | demo.namgun.or.kr 공개 데모 환경 구축 | Nuxt 3 + FastAPI (읽기 전용 모드) |
 | Naver Works급 ERP | 조직 관리, 결재, 메신저 등 그룹웨어 기능 | 장기 목표 |
 
 ---
 
-## 15. 기술 스택 요약
+## 18. 기술 스택 요약
 
 | 분류 | 기술 |
 |------|------|
@@ -886,9 +1056,9 @@ User 모델에 다음 필드 추가:
 
 ---
 
-## 16. 보안 고려사항
+## 19. 보안 고려사항
 
-### 16.1 적용된 보안 정책
+### 19.1 적용된 보안 정책
 
 - ISMS-P 기준 보안 헤더 전 사이트 적용
 - TLS 1.2+ 강제 (HSTS preload)
@@ -900,7 +1070,7 @@ User 모델에 다음 필드 추가:
 - 파일 시스템 path traversal 방지 (resolve + prefix 검증)
 - 리다이렉트 URL 도메인 화이트리스트 (`*.namgun.or.kr`)
 
-### 16.2 계획된 보안 강화
+### 19.2 계획된 보안 강화
 
 - PTR 레코드 등록으로 역방향 DNS 검증 완성
 - CSP(Content-Security-Policy) 헤더 추가 검토

@@ -13,6 +13,7 @@
 | v1.0 | 2026-02-18 | 남기완 | Initial release (Phase 0 through Phase 2 complete) |
 | v1.1 | 2026-02-19 | 남기완 | Updated through Phase 3 – Phase 6 completion |
 | v1.2 | 2026-02-21 | 남기완 | Added Phase 6.5 (Auth Gateway) and Phase 7 (Registration & Admin Panel) |
+| v1.3 | 2026-02-21 | 남기완 | Added Phase 8 (BBB New Tab Meetings), Phase 9 (Gitea Portal Integration), Phase 10 (Dashboard Renewal) |
 
 ---
 
@@ -25,7 +26,7 @@ The namgun.or.kr Integrated Portal is a self-hosted, unified platform designed f
 - Unified SSO authentication across all services (OIDC / LDAP)
 - Infrastructure aligned with ISMS-P security standards
 - Data sovereignty through self-hosting
-- Phased service rollout (Phase 0 through Phase 6)
+- Phased service rollout (Phase 0 through Phase 10)
 
 ---
 
@@ -42,6 +43,9 @@ The namgun.or.kr Integrated Portal is a self-hosted, unified platform designed f
 | Phase 6 | Native Login & SSO Integration | **Complete** | — | Native login form, Popup Bridge, Gitea SSO |
 | Phase 6.5 | Central Auth Gateway Transition | **Complete** | — | Server-side login, Portal OIDC Provider, Popup Bridge removal |
 | Phase 7 | Registration & Admin Panel | **Complete** | — | Approval-based registration, profile/password management, admin panel, RBAC |
+| Phase 8 | BBB New Tab Meetings | **Complete** | — | New tab meeting join, auto-close, Greenlight blocking, Learning Analytics |
+| Phase 9 | Gitea Portal Integration | **Complete** | — | Repo browsing, code viewer (syntax highlighting), issues/PR management (v0.5.0) |
+| Phase 10 | Dashboard Home Renewal | **Complete** | — | 8 widgets, game server status, storage gauge, Git cache (v0.5.1) |
 
 ---
 
@@ -729,9 +733,164 @@ Developed an httpx-based async client wrapping the Authentik Admin API.
 
 ---
 
-## 13. Key Troubleshooting Summary
+## 13. Phase 8: BBB New Tab Meetings (Complete)
+
+Transitioned the BBB video conferencing integration (Phase 5) from iframe-based to new tab (popup) approach, and added Learning Analytics dashboard.
+
+### 13.1 New Tab Meeting Join
+
+| Item | Detail |
+|------|--------|
+| Method | `window.open(joinURL, '_blank')` — join meeting in a separate tab |
+| logoutURL | Auto-close page (`/bbb-close`) — tab closes automatically when meeting ends |
+| Greenlight blocking | Nginx blocks direct access to BBB's default web client (Greenlight) |
+
+### 13.2 Learning Analytics
+
+- Integrated BBB 3.0 built-in Learning Analytics Dashboard via iframe within the portal
+- Displays participant statistics, speaking time, activity metrics during meetings
+- Admin/host only access
+
+### 13.3 Frontend Changes
+
+| File | Change |
+|------|--------|
+| `pages/meetings.vue` | iframe → new tab meeting join + Learning Analytics iframe added |
+| `pages/bbb-close.vue` | Auto-close page for meeting end (new) |
+
+---
+
+## 14. Phase 9: Gitea Portal Integration (Complete, v0.5.0)
+
+Wrapped the Gitea API through the portal backend, enabling users to browse Git repositories, view source code, and manage issues/PRs directly within the portal.
+
+### 14.1 Backend Architecture
+
+**Module**: `backend/app/git/`
+
+| File | Role |
+|------|------|
+| `gitea.py` | httpx-based async Gitea API client |
+| `router.py` | FastAPI router — 13 endpoints |
+| `schemas.py` | Pydantic response models |
+
+### 14.2 API Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/git/repos` | Search repositories (pagination, sorting) |
+| `GET /api/git/repos/{owner}/{repo}` | Repository detail (includes README) |
+| `GET /api/git/repos/{owner}/{repo}/contents` | Directory listing |
+| `GET /api/git/repos/{owner}/{repo}/file` | File content (Base64 decoded) |
+| `GET /api/git/repos/{owner}/{repo}/branches` | Branch listing |
+| `GET /api/git/repos/{owner}/{repo}/commits` | Commit history |
+| `GET /api/git/repos/{owner}/{repo}/issues` | Issue listing |
+| `POST /api/git/repos/{owner}/{repo}/issues` | Create issue |
+| `GET /api/git/repos/{owner}/{repo}/issues/{index}` | Issue detail |
+| `GET /api/git/repos/{owner}/{repo}/issues/{index}/comments` | Issue comments |
+| `POST /api/git/repos/{owner}/{repo}/issues/{index}/comments` | Add comment |
+| `GET /api/git/repos/{owner}/{repo}/pulls` | Pull request listing |
+| `GET /api/git/repos/{owner}/{repo}/pulls/{index}` | Pull request detail |
+
+### 14.3 Frontend Pages
+
+| Path | Description |
+|------|-------------|
+| `/git` | Repository list (search, sort, language filter) |
+| `/git/:owner/:repo` | Repository detail — file tree, README rendering, branches/commits/issues/PR tabs |
+| `/git/:owner/:repo/blob/:path` | Code viewer — Shiki syntax highlighting, line numbers, file size display |
+
+### 14.4 Key Technical Details
+
+- **Shiki syntax highlighting**: Server-side rendering supporting 100+ languages
+- **Markdown rendering**: `markdown-it` + code block syntax highlighting
+- **Large file handling**: Files exceeding 1MB flagged as `too_large` with preview blocked
+- **Base64 decoding**: Gitea API Base64-encoded file content decoded in backend
+
+---
+
+## 15. Phase 10: Dashboard Home Renewal (Complete, v0.5.1)
+
+Renewed the dashboard from a basic ServiceGrid (6 service cards) to a comprehensive home screen with 8 widgets.
+
+### 15.1 Dashboard Layout
+
+```
+┌──────────────────────────────────────────────────┐
+│  Greeting (time-of-day) + Date/Time               │
+├──────────────────────────────────────────────────┤
+│ ● Service status bar (6 service health checks)    │
+├────────────────────────┬─────────────────────────┤
+│ Recent mail (2 cols)   │ Quick shortcuts (1 col)  │
+│                        ├─────────────────────────┤
+│                        │ Storage usage            │
+├────────────────────────┼─────────────────────────┤
+│ Recent Git activity    │ Active meetings          │
+│ (2 cols)               ├─────────────────────────┤
+│                        │ Game server status        │
+└────────────────────────┴─────────────────────────┘
+```
+
+- Desktop: 3-column grid, Mobile: single-column stack
+- Each widget has independent loading skeleton
+
+### 15.2 Widget Composition
+
+| Widget | Component | Data Source |
+|--------|-----------|-------------|
+| Greeting | `DashboardGreeting.vue` | useAuth (user) |
+| Service Status | `DashboardServiceStatus.vue` | `/api/services/status` |
+| Recent Mail | `DashboardRecentMail.vue` | `/api/mail/mailboxes` → `/api/mail/messages` |
+| Recent Git Activity | `DashboardRecentGit.vue` | `/api/git/recent-commits` (new) |
+| Active Meetings | `DashboardMeetings.vue` | `/api/meetings/` |
+| Game Server Status | `DashboardGameServers.vue` | `/api/dashboard/game-servers` (new) |
+| Storage | `DashboardStorage.vue` | `/api/files/info` |
+| Quick Shortcuts | `DashboardShortcuts.vue` | Routing only |
+
+### 15.3 New Backend APIs
+
+#### `GET /api/git/recent-commits?limit=5`
+
+- Fetches 3 commits each from the 5 most recently updated repos in **parallel** (`asyncio.gather`)
+- Sorted by time, caches up to 20 commits
+- **In-memory TTL cache**: 120 seconds — only first request hits Gitea API, subsequent calls return cache
+
+#### `GET /api/dashboard/game-servers`
+
+- Queries containers with `game-panel.managed=true` label via Docker socket (`/var/run/docker.sock:ro`)
+- **Read-only**: cannot control containers, status query only
+- Returns empty array on failure (graceful fallback)
+
+### 15.4 Storage Capacity Display Improvements
+
+- `shutil.disk_usage()` for instant NFS volume total/used capacity (replaced `rglob("*")` tree walk)
+- Dashboard: percentage gauge bar + total capacity display
+- File browser sidebar: same percentage gauge bar added
+- Color coded: green below 70%, yellow 70–90%, red above 90%
+
+### 15.5 Stalwart Health Check Fix
+
+- Confirmed Stalwart v0.15 returns 404 for `/healthz`
+- Changed to `/health/liveness` which returns 200
+- Modified `backend/app/services/health.py`
+
+### 15.6 Shared Utilities
+
+**File**: `frontend/lib/date.ts`
+
+| Function | Description |
+|----------|-------------|
+| `timeAgo(dateStr)` | Relative time display (just now, N minutes ago, N hours ago, N days ago) |
+| `formatSize(bytes)` | Bytes → human-readable size (B, KB, MB, GB, TB) |
+
+---
+
+## 16. Key Troubleshooting Summary
 
 | # | Problem | Cause | Resolution |
+| 23 | Git recent-commits response delay | Sequential fetching from 50 repos | Reduced to 5 repos + asyncio.gather parallel + 120s in-memory TTL cache |
+| 24 | Storage capacity query delay | `rglob("*")` NFS tree walk | Switched to instant `shutil.disk_usage()` |
+| 25 | Stalwart health check always failing | v0.15 returns 404 for `/healthz` | Changed URL to `/health/liveness` (returns 200) |
 |---|---------|-------|------------|
 | 1 | LDAP authentication failure in Stalwart v0.15 | `bind.auth.enable` defaults to hash comparison mode | Set `bind.auth.method = "lookup"` |
 | 2 | Stalwart DKIM signing key not recognized | Key naming convention mismatch | Use `{algorithm}-{domain}` format (e.g., `rsa-namgun.or.kr`) |
@@ -758,16 +917,16 @@ Developed an httpx-based async client wrapping the Authentik Admin API.
 
 ---
 
-## 14. Remaining Tasks
+## 17. Remaining Tasks
 
-### 14.1 Immediate Action Required
+### 17.1 Immediate Action Required
 
 - [x] Confirm DKIM `dkim=pass` (after DNS cache expiry)
 - [ ] Register PTR record (SK Broadband, `211.244.144.69 → mail.namgun.or.kr`)
 - [ ] Add SPF TXT record for `mail.namgun.or.kr` (resolve SPF_HELO_NONE)
 - [ ] Set Authentik account passwords: tsha, nahee14, kkb
 
-### 14.2 Completed Items
+### 17.2 Completed Items
 
 | Item | Completed Phase |
 |------|----------------|
@@ -785,20 +944,31 @@ Developed an httpx-based async client wrapping the Authentik Admin API.
 | Admin user management panel | Phase 7 |
 | Admin role assignment (RBAC) | Phase 7 |
 | akadmin default account deactivation (ISMS-P) | Phase 7 |
+| BBB new tab meeting join + auto-close | Phase 8 |
+| Greenlight direct access blocking | Phase 8 |
+| Learning Analytics dashboard (iframe) | Phase 8 |
+| Gitea API wrapping (13 endpoints) | Phase 9 |
+| Repo browsing + code viewer (Shiki syntax highlighting) | Phase 9 |
+| Issue/PR management | Phase 9 |
+| Dashboard 8-widget renewal | Phase 10 |
+| Game server status query (Docker socket) | Phase 10 |
+| Storage capacity percentage gauge | Phase 10 |
+| Git recent-commits in-memory cache | Phase 10 |
+| Stalwart health check URL fix | Phase 10 |
 
-### 14.3 Future Plans
+### 17.3 Future Plans
 
 | Item | Description | Expected Technology Stack |
 |------|-------------|--------------------------|
 | MFA Integration | Authentik MFA flow + portal UI challenge handling | Authentik Flow Executor + TOTP/WebAuthn |
-| Game Panel portal integration | Manage game servers directly within the portal | Portal API + Game Panel API integration |
+| Game Panel portal integration | Manage game servers directly within the portal (status query completed) | Portal API + Game Panel API integration |
 | CalDAV / CardDAV | Calendar/contacts synchronization | Stalwart built-in or separate server |
 | Demo site | Build public demo environment at demo.namgun.or.kr | Nuxt 3 + FastAPI (read-only mode) |
 | Naver Works-grade ERP | Groupware features such as organization management, approvals, and messaging | Long-term objective |
 
 ---
 
-## 15. Technology Stack Summary
+## 18. Technology Stack Summary
 
 | Category | Technology |
 |----------|------------|
@@ -820,9 +990,9 @@ Developed an httpx-based async client wrapping the Authentik Admin API.
 
 ---
 
-## 16. Security Considerations
+## 19. Security Considerations
 
-### 16.1 Applied Security Policies
+### 19.1 Applied Security Policies
 
 - ISMS-P compliant security headers applied across all sites
 - TLS 1.2+ enforced (HSTS preload)
@@ -834,7 +1004,7 @@ Developed an httpx-based async client wrapping the Authentik Admin API.
 - Filesystem path traversal prevention (resolve + prefix verification)
 - Redirect URL domain whitelist (`*.namgun.or.kr`)
 
-### 16.2 Planned Security Enhancements
+### 19.2 Planned Security Enhancements
 
 - Complete reverse DNS verification through PTR record registration
 - Review and addition of CSP (Content-Security-Policy) headers

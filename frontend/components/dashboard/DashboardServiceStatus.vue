@@ -23,7 +23,7 @@ onMounted(() => {
           :class="{
             'bg-green-500': svc.status === 'ok',
             'bg-red-500': svc.status === 'down',
-            'bg-yellow-500': svc.status === 'checking',
+            'bg-yellow-500 animate-pulse': svc.status === 'checking',
           }"
         />
         <span class="text-sm">{{ svc.name }}</span>

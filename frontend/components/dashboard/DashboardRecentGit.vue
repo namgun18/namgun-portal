@@ -40,7 +40,10 @@ function firstLine(msg: string) {
   <UiCard class="col-span-1 lg:col-span-2">
     <UiCardHeader class="pb-3">
       <div class="flex items-center justify-between">
-        <UiCardTitle class="text-base">최근 Git 활동</UiCardTitle>
+        <div class="flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-purple-500"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+          <UiCardTitle class="text-base">최근 Git 활동</UiCardTitle>
+        </div>
         <NuxtLink to="/git" class="text-xs text-primary hover:underline">전체 보기</NuxtLink>
       </div>
     </UiCardHeader>

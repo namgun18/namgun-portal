@@ -10,7 +10,10 @@ const activeMeetings = computed(() => meetings.value.filter(m => m.running))
   <UiCard>
     <UiCardHeader class="pb-3">
       <div class="flex items-center justify-between">
-        <UiCardTitle class="text-base">진행 중인 회의</UiCardTitle>
+        <div class="flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-green-500"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect width="14" height="12" x="2" y="6" rx="2"/></svg>
+          <UiCardTitle class="text-base">진행 중인 회의</UiCardTitle>
+        </div>
         <NuxtLink to="/meetings" class="text-xs text-primary hover:underline">전체 보기</NuxtLink>
       </div>
     </UiCardHeader>

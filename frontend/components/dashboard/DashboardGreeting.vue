@@ -28,17 +28,19 @@ const dateStr = computed(() =>
 </script>
 
 <template>
-  <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-1">
-    <div>
-      <h1 class="text-2xl font-bold tracking-tight">
-        {{ greeting }}, {{ user?.display_name || user?.username }}님
-      </h1>
-      <p class="text-muted-foreground text-sm mt-0.5">
-        오늘도 좋은 하루 되세요
+  <div class="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-500/20 dark:to-indigo-500/20 dark:border dark:border-blue-500/30 p-6 text-white dark:text-foreground shadow-md">
+    <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-1">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">
+          {{ greeting }}, {{ user?.display_name || user?.username }}님
+        </h1>
+        <p class="text-blue-100 dark:text-muted-foreground text-sm mt-0.5">
+          오늘도 좋은 하루 되세요
+        </p>
+      </div>
+      <p class="text-sm text-blue-200 dark:text-muted-foreground shrink-0">
+        {{ dateStr }}
       </p>
     </div>
-    <p class="text-sm text-muted-foreground shrink-0">
-      {{ dateStr }}
-    </p>
   </div>
 </template>

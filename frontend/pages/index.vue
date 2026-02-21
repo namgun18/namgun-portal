@@ -11,7 +11,7 @@ definePageMeta({ layout: 'default' })
     <DashboardServiceStatus />
 
     <!-- Main grid: 3 columns on lg -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
       <!-- Left 2 cols: recent mail -->
       <DashboardRecentMail />
 

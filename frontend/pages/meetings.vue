@@ -15,9 +15,13 @@ const {
   loadingDetail,
   loadingRecordings,
   showCreateModal,
+  activeJoinUrl,
+  activeMeetingName,
   fetchMeetings,
   fetchMeetingDetail,
   joinMeeting,
+  leaveMeeting,
+  openInNewTab,
   endMeeting,
   fetchRecordings,
   deleteRecording,
@@ -68,7 +72,48 @@ async function refresh() {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+  <!-- 회의 진행 중: iframe 전체화면 -->
+  <div v-if="activeJoinUrl" class="flex flex-col h-[calc(100vh-3.5rem)]">
+    <!-- 최소 컨트롤 바 -->
+    <div class="flex items-center justify-between px-4 py-1.5 border-b bg-background">
+      <div class="flex items-center gap-2 min-w-0">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-primary shrink-0">
+          <path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+        </svg>
+        <span class="text-sm font-medium truncate">{{ activeMeetingName }}</span>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button
+          @click="openInNewTab"
+          class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border hover:bg-accent transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+          </svg>
+          새 탭에서 열기
+        </button>
+        <button
+          @click="leaveMeeting"
+          class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+          회의 나가기
+        </button>
+      </div>
+    </div>
+    <!-- BBB iframe -->
+    <iframe
+      :src="activeJoinUrl"
+      class="flex-1 w-full border-0"
+      allow="camera; microphone; display-capture; autoplay; fullscreen; clipboard-write"
+      allowfullscreen
+    />
+  </div>
+
+  <!-- 기존 회의 목록 UI -->
+  <div v-else class="flex h-[calc(100vh-3.5rem)] overflow-hidden">
     <!-- Main content -->
     <div class="flex-1 flex flex-col min-w-0">
       <!-- Command bar -->

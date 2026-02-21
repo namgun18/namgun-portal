@@ -16,6 +16,7 @@
 | v1.3 | 2026-02-21 | 남기완 | Added Phase 8 (BBB New Tab Meetings), Phase 9 (Gitea Portal Integration), Phase 10 (Dashboard Renewal) |
 | v1.4 | 2026-02-22 | 남기완 | Added Phase 11 (Visual Refresh), Phase 12 (Infrastructure Security Hardening) |
 | v1.5 | 2026-02-22 | 남기완 | Added Phase 13 (LocalStack Lab — AWS IaC Learning Environment) |
+| v1.6 | 2026-02-22 | 남기완 | Added Phase 14 (UI Improvements & SSR Auth Fix) |
 
 ---
 
@@ -28,7 +29,7 @@ The namgun.or.kr Integrated Portal is a self-hosted, unified platform designed f
 - Unified SSO authentication across all services (OIDC / LDAP)
 - Infrastructure aligned with ISMS-P security standards
 - Data sovereignty through self-hosting
-- Phased service rollout (Phase 0 through Phase 13)
+- Phased service rollout (Phase 0 through Phase 14)
 
 ---
 
@@ -51,6 +52,7 @@ The namgun.or.kr Integrated Portal is a self-hosted, unified platform designed f
 | Phase 11 | Visual Refresh | **Complete** | — | Color palette separation, card/button interactions, gradient hero/header, widget color icons (v0.5.2) |
 | Phase 12 | Infrastructure Security Hardening | **Complete** | — | Full-server vulnerability scan, CSP headers, firewalld activation, OS security patches, test page cleanup |
 | Phase 13 | LocalStack Lab — AWS IaC Learning Environment | **Complete** | — | Terraform IaC, per-user LocalStack containers, topology visualization, templates, CI/CD |
+| Phase 14 | UI Improvements & SSR Auth Fix | **Complete** | — | Lab left-right split with drag resize, mail compose popup with signature selection, SSR cookie forwarding, Nginx cache control (v0.6.1) |
 
 ---
 
@@ -1189,7 +1191,108 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 
 ---
 
-## 19. Key Troubleshooting Summary
+## 19. Phase 14: UI Improvements & SSR Auth Fix (Complete, v0.6.1)
+
+Comprehensive UI usability improvements and a fundamental fix for SSR authentication cookie forwarding.
+
+### 19.1 Lab Page Left-Right Split Layout
+
+Changed from vertical stacking (editor above / topology below) to a **desktop (lg+) side-by-side layout**, allowing code and topology to be viewed simultaneously.
+
+```
+Desktop (lg+):
+┌─────────┬──────────────────┬──────────────────┐
+│         │ Terraform        │ Topology         │
+│ Sidebar │ (Editor + Output)│ (Graph)          │
+│         │                  ├──────────────────┤
+│         │                  │ Resources (fold) │
+└─────────┴──────────────────┴──────────────────┘
+
+Mobile (<lg): Existing vertical stack + tab switching preserved
+```
+
+- **Drag resize**: Mouse drag to adjust the split ratio between the topology and resources panels
+- **Resources panel fold**: Button click to fully collapse the resources panel for full topology view
+
+### 19.2 Mail Compose Popup Window
+
+Changed from a Teleport modal (same-page overlay) to a **`window.open()` standalone popup window**, enabling users to view the mail list while composing.
+
+| Item | Detail |
+|------|--------|
+| New file | `frontend/pages/mail/compose.vue` (standalone page, no layout) |
+| Popup size | 700×600px |
+| Data passing | Query parameters: `?mode=new\|reply\|replyAll\|forward&msgId=...` |
+| Send complete | `window.close()` + `postMessage` to parent window for list refresh |
+
+#### Signature Selection
+
+- Signature dropdown added below the body editor
+- Integrated with existing `useMailSignature()` composable
+- Default signature auto-inserted; signature swap replaces body footer
+- "No signature" option included
+
+### 19.3 Mail List Row Numbers
+
+Added a **row number column** to the mail list, displaying consistent numbering relative to the full list even during pagination.
+- Number calculation: `(currentPage - 1) * limit + index + 1`
+- Automatically hidden on mobile (sm and below)
+
+### 19.4 Full Viewport Layout Overhaul
+
+| Change | Description |
+|--------|-------------|
+| Container constraint removed | `max-w-7xl` container → full-width usage |
+| Footer removed | `AppFooter.vue` deactivated, maximizing page area |
+| Profile 2-column grid | Profile cards arranged in `grid-cols-2` on lg and above |
+| Flex overflow fix | Added `min-h-0` to nested flex containers for proper scroll chain |
+
+### 19.5 SSR Cookie Forwarding Fix
+
+| Item | Detail |
+|------|--------|
+| Problem | Nuxt 3 SSR `$fetch('/api/auth/me')` did not include browser cookies → server judged as unauthenticated → page refresh redirected to home |
+| Cause | `$fetch` during SSR is a server-to-server call, so browser `Set-Cookie` is not automatically forwarded |
+| Solution | Capture request headers with `useRequestHeaders(['cookie'])`, pass to `$fetch` options as `headers: { cookie }` |
+| Modified file | `frontend/composables/useAuth.ts` |
+
+### 19.6 Nginx Cache Control
+
+| Location | Cache-Control Header |
+|----------|---------------------|
+| `/_nuxt/` (static assets) | `public, max-age=31536000, immutable` (content-hash filenames ensure invalidation) |
+| `/` (HTML/SSR) | `no-cache, no-store, must-revalidate` (always serve latest HTML) |
+
+### 19.7 Other Fixes
+
+- **Dashboard mail shortcut**: Removed `navigateTo('/mail')` (unnecessary after popup transition)
+- **DB init retry**: Added 5-attempt retry logic for PostgreSQL connection failures
+
+### 19.8 Modified Files
+
+| # | File | Type |
+|---|------|------|
+| 1 | `frontend/pages/lab.vue` | Modified (left-right split + drag resize) |
+| 2 | `frontend/pages/mail/compose.vue` | **New** (popup mail compose + signature selection) |
+| 3 | `frontend/components/mail/MailList.vue` | Modified (row number column) |
+| 4 | `frontend/components/mail/MailCompose.vue` | Modified (modal deactivated) |
+| 5 | `frontend/composables/useMail.ts` | Modified (window.open + postMessage) |
+| 6 | `frontend/composables/useAuth.ts` | Modified (SSR cookie forwarding) |
+| 7 | `frontend/layouts/default.vue` | Modified (full viewport layout) |
+| 8 | `frontend/pages/profile.vue` | Modified (2-column grid) |
+| 9 | `frontend/pages/files.vue` | Modified (layout adjustment) |
+| 10 | `frontend/pages/mail/index.vue` | Modified (layout adjustment) |
+| 11 | `frontend/pages/meetings.vue` | Modified (layout adjustment) |
+| 12 | `frontend/pages/git/index.vue` | Modified (layout adjustment) |
+| 13 | `frontend/pages/admin.vue` | Modified (layout adjustment) |
+| 14 | `frontend/components/dashboard/DashboardShortcuts.vue` | Modified (navigateTo removed) |
+| 15 | `frontend/components/AppFooter.vue` | Modified (deactivated) |
+| 16 | `nginx/nginx.conf` | Modified (cache control headers) |
+| 17 | `backend/app/db/session.py` | Modified (DB retry logic) |
+
+---
+
+## 20. Key Troubleshooting Summary
 
 | # | Problem | Cause | Resolution |
 | 23 | Git recent-commits response delay | Sequential fetching from 50 repos | Reduced to 5 repos + asyncio.gather parallel + 120s in-memory TTL cache |
@@ -1218,12 +1321,14 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 | 20 | `authentik_sub` mismatch (duplicate records) | Registration stored Authentik PK (integer) as `authentik_sub`, OIDC login stored uid (hash) | Added separate `authentik_pk` column, `authentik_sub` stores uid only |
 | 21 | Gitea OAuth `id_token` missing | Portal OIDC token response lacked `id_token` | Added JWT `id_token` to token endpoint |
 | 22 | Gitea OAuth `redirect_uri` mismatch | `.env` missing `/callback` suffix | Registered full path `/user/oauth2/portal/callback` in `redirect_uris` |
+| 26 | Page refresh redirects to home in SSR | Nuxt 3 SSR `$fetch` does not automatically forward browser cookies → server judges as unauthenticated | Capture cookies with `useRequestHeaders(['cookie'])` and pass to `$fetch` headers |
+| 27 | SPA navigation completely broken after deploy | Browser cached old JS chunks from previous build → hydration failure → NuxtLink degrades to plain `<a>` tags | Applied Nginx `Cache-Control: no-cache` (HTML) + `immutable` (asset content-hash) + full browser cache clear |
 
 ---
 
-## 20. Remaining Tasks
+## 21. Remaining Tasks
 
-### 20.1 Immediate Action Required
+### 21.1 Immediate Action Required
 
 - [x] Confirm DKIM `dkim=pass` (after DNS cache expiry)
 - [ ] Register PTR record (SK Broadband, `211.244.144.69 → mail.namgun.or.kr`)
@@ -1232,7 +1337,7 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 - [ ] Reboot Nginx/Mail servers for kernel update (security patches applied, new kernel pending load)
 - [ ] Transition mail server SELinux to Enforcing (verify services after reboot)
 
-### 20.2 Completed Items
+### 21.2 Completed Items
 
 | Item | Completed Phase |
 |------|----------------|
@@ -1277,8 +1382,15 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 | Pre-defined Terraform templates (5) | Phase 13 |
 | CI/CD deploy endpoint | Phase 13 |
 | Member invite/management (multi-tenant) | Phase 13 |
+| Lab left-right split layout + drag resize | Phase 14 |
+| Mail compose popup window (window.open) | Phase 14 |
+| Mail compose signature selection | Phase 14 |
+| Mail list row number column | Phase 14 |
+| Full viewport layout (container constraint removed) | Phase 14 |
+| SSR cookie forwarding fix (useRequestHeaders) | Phase 14 |
+| Nginx cache control headers | Phase 14 |
 
-### 20.3 Future Plans
+### 21.3 Future Plans
 
 | Item | Description | Expected Technology Stack |
 |------|-------------|--------------------------|
@@ -1290,7 +1402,7 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 
 ---
 
-## 21. Technology Stack Summary
+## 22. Technology Stack Summary
 
 | Category | Technology |
 |----------|------------|
@@ -1313,9 +1425,9 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 
 ---
 
-## 22. Security Considerations
+## 23. Security Considerations
 
-### 22.1 Applied Security Policies
+### 23.1 Applied Security Policies
 
 - ISMS-P compliant security headers applied across all sites
 - TLS 1.2+ enforced (HSTS preload)
@@ -1330,7 +1442,7 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 - firewalld firewall activated on all servers (Phase 12)
 - Regular OS security patch application (Phase 12)
 
-### 22.2 Planned Security Enhancements
+### 23.2 Planned Security Enhancements
 
 - Complete reverse DNS verification through PTR record registration
 - Strengthen Authentik MFA (multi-factor authentication) policies
@@ -1338,4 +1450,4 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 
 ---
 
-*End of document. Last updated: 2026-02-22 (v1.5)*
+*End of document. Last updated: 2026-02-22 (v1.6)*

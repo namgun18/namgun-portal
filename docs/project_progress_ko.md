@@ -16,6 +16,7 @@
 | v1.3 | 2026-02-21 | 남기완 | Phase 8(BBB 새 탭 회의), Phase 9(Gitea 포털 내재화), Phase 10(대시보드 리뉴얼) 추가 |
 | v1.4 | 2026-02-22 | 남기완 | Phase 11(비주얼 리프레시), Phase 12(인프라 보안 강화) 추가 |
 | v1.5 | 2026-02-22 | 남기완 | Phase 13(LocalStack Lab — AWS IaC 학습 환경) 추가 |
+| v1.6 | 2026-02-22 | 남기완 | Phase 14(UI 개선 및 SSR 인증 수정) 추가 |
 
 ---
 
@@ -28,7 +29,7 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 - 모든 서비스에 대한 SSO 인증 통합 (OIDC / LDAP)
 - ISMS-P 보안 기준에 준하는 인프라 구성
 - 셀프 호스팅 기반의 데이터 주권 확보
-- 단계적 서비스 확장 (Phase 0 ~ Phase 13)
+- 단계적 서비스 확장 (Phase 0 ~ Phase 14)
 
 ---
 
@@ -51,6 +52,7 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 | Phase 11 | 비주얼 리프레시 | **완료** | — | 색상 팔레트 분리, 카드/버튼 인터랙션, 그라디언트 히어로·헤더, 위젯 색상 아이콘 (v0.5.2) |
 | Phase 12 | 인프라 보안 강화 | **완료** | — | 전서버 취약점 스캔, CSP 헤더, firewalld 활성화, OS 보안 패치, test 페이지 정리 |
 | Phase 13 | LocalStack Lab — AWS IaC 학습 환경 | **완료** | — | Terraform IaC, 사용자별 LocalStack 컨테이너, 토폴로지 시각화, 템플릿, CI/CD |
+| Phase 14 | UI 개선 및 SSR 인증 수정 | **완료** | — | Lab 좌우 분할·리사이즈, 메일 팝업 작성·서명 선택, SSR 쿠키 전달, Nginx 캐시 제어 (v0.6.1) |
 
 ---
 
@@ -1255,7 +1257,108 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 
 ---
 
-## 19. 핵심 트러블슈팅 정리
+## 19. Phase 14: UI 개선 및 SSR 인증 수정 (완료, v0.6.1)
+
+포털 UI의 사용성을 전면 개선하고, SSR 환경에서 인증 쿠키가 전달되지 않던 근본적 문제를 해결하였다.
+
+### 19.1 Lab 페이지 좌우 분할 레이아웃
+
+기존 상하 배치(에디터 위 / 토폴로지 아래)에서 **데스크톱(lg+) 좌우 분할**로 변경하여 코드와 토폴로지를 동시에 확인 가능하게 개선하였다.
+
+```
+데스크톱 (lg+):
+┌─────────┬──────────────────┬──────────────────┐
+│         │ Terraform        │ Topology         │
+│ Sidebar │ (에디터 + 출력)   │ (그래프)          │
+│         │                  ├──────────────────┤
+│         │                  │ Resources (접기)  │
+└─────────┴──────────────────┴──────────────────┘
+
+모바일 (<lg): 기존 상하 스택 + 탭 전환 유지
+```
+
+- **드래그 리사이즈**: 토폴로지와 리소스 패널 사이를 마우스 드래그로 분할 비율 조정 가능
+- **리소스 패널 접기**: 버튼 클릭으로 리소스 패널을 완전히 접어 토폴로지 전체 표시
+
+### 19.2 메일 작성 팝업 창
+
+기존 Teleport 모달(같은 페이지 오버레이)에서 **`window.open()` 별도 팝업 창**으로 변경하여, 메일 목록을 확인하면서 작성할 수 있도록 개선하였다.
+
+| 항목 | 내용 |
+|------|------|
+| 새 파일 | `frontend/pages/mail/compose.vue` (독립 페이지, layout 없음) |
+| 팝업 크기 | 700×600px |
+| 전달 방식 | 쿼리 파라미터: `?mode=new\|reply\|replyAll\|forward&msgId=...` |
+| 전송 완료 | `window.close()` + 부모 창에 `postMessage`로 목록 새로고침 신호 |
+
+#### 서명 선택 기능
+
+- 본문 에디터 하단에 서명 드롭다운 추가
+- 기존 `useMailSignature()` 컴포저블과 연동
+- 기본 서명 자동 삽입, 서명 변경 시 본문 하단 교체
+- "서명 없음" 옵션 포함
+
+### 19.3 메일 리스트 번호 컬럼
+
+메일 목록에 **순번 컬럼**을 추가하여 페이지네이션 시에도 전체 목록 기준 일관된 번호를 표시한다.
+- 번호 산출: `(currentPage - 1) * limit + index + 1`
+- 모바일(sm 이하)에서는 자동 숨김
+
+### 19.4 전체 뷰포트 레이아웃 조정
+
+| 변경 사항 | 설명 |
+|-----------|------|
+| 컨테이너 제약 제거 | `max-w-7xl` 컨테이너 → 전체 너비 사용 |
+| 푸터 제거 | `AppFooter.vue` 비활성화, 페이지 영역 극대화 |
+| 프로필 2열 그리드 | lg 이상에서 프로필 카드를 2열 `grid-cols-2`로 배치 |
+| flex overflow 수정 | 중첩 flex 컨테이너에 `min-h-0` 추가하여 스크롤 체인 정상 작동 |
+
+### 19.5 SSR 쿠키 전달 수정
+
+| 항목 | 내용 |
+|------|------|
+| 문제 | Nuxt 3 SSR에서 `$fetch('/api/auth/me')` 호출 시 브라우저 쿠키 미포함 → 서버에서 미인증 판정 → 새로고침 시 홈으로 리다이렉트 |
+| 원인 | SSR 단계에서 `$fetch`는 서버-to-서버 호출이므로 브라우저의 `Set-Cookie`가 자동 전달되지 않음 |
+| 해결 | `useRequestHeaders(['cookie'])`로 요청 헤더를 캡처, `$fetch` 옵션에 `headers: { cookie }` 전달 |
+| 수정 파일 | `frontend/composables/useAuth.ts` |
+
+### 19.6 Nginx 캐시 제어
+
+| 위치 | Cache-Control 헤더 |
+|------|-------------------|
+| `/_nuxt/` (정적 에셋) | `public, max-age=31536000, immutable` (content-hash 파일명으로 무효화 보장) |
+| `/` (HTML/SSR) | `no-cache, no-store, must-revalidate` (항상 최신 HTML 응답) |
+
+### 19.7 기타 수정
+
+- **대시보드 메일 바로가기**: `navigateTo('/mail')` 제거 (팝업 전환으로 불필요)
+- **DB 초기화 재시도**: PostgreSQL 연결 실패 시 5회 재시도 로직 추가
+
+### 19.8 수정 파일 목록
+
+| # | 파일 | 구분 |
+|---|------|------|
+| 1 | `frontend/pages/lab.vue` | 수정 (좌우 분할 + 드래그 리사이즈) |
+| 2 | `frontend/pages/mail/compose.vue` | **신규** (팝업 메일 작성 + 서명 선택) |
+| 3 | `frontend/components/mail/MailList.vue` | 수정 (번호 컬럼) |
+| 4 | `frontend/components/mail/MailCompose.vue` | 수정 (모달 비활성화) |
+| 5 | `frontend/composables/useMail.ts` | 수정 (window.open + postMessage) |
+| 6 | `frontend/composables/useAuth.ts` | 수정 (SSR 쿠키 전달) |
+| 7 | `frontend/layouts/default.vue` | 수정 (전체 뷰포트 레이아웃) |
+| 8 | `frontend/pages/profile.vue` | 수정 (2열 그리드) |
+| 9 | `frontend/pages/files.vue` | 수정 (레이아웃 조정) |
+| 10 | `frontend/pages/mail/index.vue` | 수정 (레이아웃 조정) |
+| 11 | `frontend/pages/meetings.vue` | 수정 (레이아웃 조정) |
+| 12 | `frontend/pages/git/index.vue` | 수정 (레이아웃 조정) |
+| 13 | `frontend/pages/admin.vue` | 수정 (레이아웃 조정) |
+| 14 | `frontend/components/dashboard/DashboardShortcuts.vue` | 수정 (navigateTo 제거) |
+| 15 | `frontend/components/AppFooter.vue` | 수정 (비활성화) |
+| 16 | `nginx/nginx.conf` | 수정 (캐시 제어 헤더) |
+| 17 | `backend/app/db/session.py` | 수정 (DB 재시도 로직) |
+
+---
+
+## 20. 핵심 트러블슈팅 정리
 
 | # | 문제 | 원인 | 해결 방법 |
 | 23 | Git recent-commits 응답 지연 | 50개 저장소를 순차 조회 | 5개로 축소 + asyncio.gather 병렬 + 120초 인메모리 TTL 캐시 |
@@ -1284,12 +1387,14 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 | 20 | `authentik_sub` 불일치 (중복 레코드) | 회원가입 시 Authentik PK(정수)를 `authentik_sub`에 저장, OIDC 로그인은 uid(해시) 저장 | `authentik_pk` 별도 컬럼 추가, `authentik_sub`에는 uid만 저장 |
 | 21 | Gitea OAuth `id_token` 누락 | 포털 OIDC 토큰 응답에 `id_token`이 없음 | 토큰 엔드포인트에 JWT `id_token` 추가 |
 | 22 | Gitea OAuth `redirect_uri` 불일치 | `.env`에 `/callback` 누락 | `redirect_uris`에 `/user/oauth2/portal/callback` 전체 경로 등록 |
+| 26 | SSR에서 페이지 새로고침 시 홈으로 리다이렉트 | Nuxt 3 SSR `$fetch`가 브라우저 쿠키를 자동 전달하지 않음 → 서버에서 미인증 판정 | `useRequestHeaders(['cookie'])`로 쿠키 캡처 후 `$fetch` 헤더에 전달 |
+| 27 | 배포 후 SPA 네비게이션 완전 불능 | 브라우저가 이전 빌드의 JS 청크를 캐시 → 하이드레이션 실패 → NuxtLink가 `<a>` 태그로 퇴화 | Nginx `Cache-Control: no-cache` (HTML) + `immutable` (에셋 content-hash) 적용 + 브라우저 캐시 전체 삭제 |
 
 ---
 
-## 20. 잔여 작업 항목
+## 21. 잔여 작업 항목
 
-### 20.1 즉시 조치 필요
+### 21.1 즉시 조치 필요
 
 - [x] DKIM `dkim=pass` 확인 (DNS 캐시 만료 후)
 - [ ] PTR 레코드 등록 (SK 브로드밴드, `211.244.144.69 → mail.namgun.or.kr`)
@@ -1298,7 +1403,7 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 - [ ] Nginx/Mail 서버 커널 재부팅 (보안 패치 적용 완료, 신규 커널 로드 필요)
 - [ ] 메일서버 SELinux Enforcing 전환 (재부팅 후 서비스 정상 확인 필요)
 
-### 20.2 완료된 항목
+### 21.2 완료된 항목
 
 | 항목 | 완료 단계 |
 |------|----------|
@@ -1343,8 +1448,15 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 | 사전 정의 Terraform 템플릿 5종 | Phase 13 |
 | CI/CD 배포 엔드포인트 | Phase 13 |
 | 멤버 초대/관리 (멀티테넌트) | Phase 13 |
+| Lab 좌우 분할 레이아웃 + 드래그 리사이즈 | Phase 14 |
+| 메일 작성 팝업 창 (window.open) | Phase 14 |
+| 메일 작성 시 서명 선택 기능 | Phase 14 |
+| 메일 리스트 번호 컬럼 | Phase 14 |
+| 전체 뷰포트 레이아웃 (컨테이너 제약 제거) | Phase 14 |
+| SSR 쿠키 전달 수정 (useRequestHeaders) | Phase 14 |
+| Nginx 캐시 제어 헤더 | Phase 14 |
 
-### 20.3 향후 계획
+### 21.3 향후 계획
 
 | 항목 | 내용 | 예상 기술 스택 |
 |------|------|---------------|
@@ -1356,7 +1468,7 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 
 ---
 
-## 21. 기술 스택 요약
+## 22. 기술 스택 요약
 
 | 분류 | 기술 |
 |------|------|
@@ -1379,9 +1491,9 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 
 ---
 
-## 22. 보안 고려사항
+## 23. 보안 고려사항
 
-### 22.1 적용된 보안 정책
+### 23.1 적용된 보안 정책
 
 - ISMS-P 기준 보안 헤더 전 사이트 적용
 - TLS 1.2+ 강제 (HSTS preload)
@@ -1396,7 +1508,7 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 - firewalld 방화벽 전 서버 활성화 (Phase 12)
 - 정기 OS 보안 패치 적용 (Phase 12)
 
-### 22.2 계획된 보안 강화
+### 23.2 계획된 보안 강화
 
 - PTR 레코드 등록으로 역방향 DNS 검증 완성
 - Authentik MFA(다중 인증) 정책 강화
@@ -1404,4 +1516,4 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 
 ---
 
-*문서 끝. 최종 갱신: 2026-02-22 (v1.5)*
+*문서 끝. 최종 갱신: 2026-02-22 (v1.6)*

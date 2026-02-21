@@ -14,6 +14,7 @@
 | v1.1 | 2026-02-19 | 남기완 | Updated through Phase 3 – Phase 6 completion |
 | v1.2 | 2026-02-21 | 남기완 | Added Phase 6.5 (Auth Gateway) and Phase 7 (Registration & Admin Panel) |
 | v1.3 | 2026-02-21 | 남기완 | Added Phase 8 (BBB New Tab Meetings), Phase 9 (Gitea Portal Integration), Phase 10 (Dashboard Renewal) |
+| v1.4 | 2026-02-22 | 남기완 | Added Phase 11 (Visual Refresh), Phase 12 (Infrastructure Security Hardening) |
 
 ---
 
@@ -26,7 +27,7 @@ The namgun.or.kr Integrated Portal is a self-hosted, unified platform designed f
 - Unified SSO authentication across all services (OIDC / LDAP)
 - Infrastructure aligned with ISMS-P security standards
 - Data sovereignty through self-hosting
-- Phased service rollout (Phase 0 through Phase 10)
+- Phased service rollout (Phase 0 through Phase 12)
 
 ---
 
@@ -46,6 +47,8 @@ The namgun.or.kr Integrated Portal is a self-hosted, unified platform designed f
 | Phase 8 | BBB New Tab Meetings | **Complete** | — | New tab meeting join, auto-close, Greenlight blocking, Learning Analytics |
 | Phase 9 | Gitea Portal Integration | **Complete** | — | Repo browsing, code viewer (syntax highlighting), issues/PR management (v0.5.0) |
 | Phase 10 | Dashboard Home Renewal | **Complete** | — | 8 widgets, game server status, storage gauge, Git cache (v0.5.1) |
+| Phase 11 | Visual Refresh | **Complete** | — | Color palette separation, card/button interactions, gradient hero/header, widget color icons (v0.5.2) |
+| Phase 12 | Infrastructure Security Hardening | **Complete** | — | Full-server vulnerability scan, CSP headers, firewalld activation, OS security patches, test page cleanup |
 
 ---
 
@@ -885,7 +888,171 @@ Renewed the dashboard from a basic ServiceGrid (6 service cards) to a comprehens
 
 ---
 
-## 16. Key Troubleshooting Summary
+## 16. Phase 11: Visual Refresh (Complete, v0.5.2)
+
+Improved the monotonous visual elements of the existing portal UI by separating the color palette, adding card/button interactions, gradient hero cards, and per-widget colored icons.
+
+### 16.1 Color Palette Renewal
+
+Previously, `primary`, `accent`, `secondary`, and `muted` all shared the same gray value (HSL `210 40% 96.1%`), making visual distinction impossible. This was resolved by assigning distinct values.
+
+**Light Mode Key Changes** (`frontend/assets/css/main.css`):
+
+| Variable | Before | After | Description |
+|----------|--------|-------|-------------|
+| `--primary` | `222.2 47.4% 11.2%` (near-black) | `221 83% 53%` (#3B82F6) | Vivid blue |
+| `--accent` | `210 40% 96.1%` (same as primary) | `214 95% 93%` (#DBEAFE) | Light blue |
+| `--ring` | `222.2 84% 4.9%` | `221 83% 53%` | Matched to primary |
+
+**Dark Mode Key Changes**:
+
+| Variable | Before | After |
+|----------|--------|-------|
+| `--primary` | `210 40% 98%` | `217 91% 60%` (#60A5FA) |
+| `--accent` | `217.2 32.6% 17.5%` | `217 50% 20%` |
+| `--ring` | `212.7 26.8% 83.9%` | `217 91% 60%` |
+
+`secondary` and `muted` were kept unchanged to maintain their neutral gray role.
+
+### 16.2 Card/Button Interactions
+
+| Component | Changes |
+|-----------|---------|
+| `Card.vue` | Added `hover:shadow-md transition-shadow duration-200` — shadow transition on hover |
+| `Button.vue` | `active:scale-[0.98]` press feedback, `transition-all`, default variant gets `shadow-sm hover:shadow-md` |
+
+### 16.3 Gradient Hero Card
+
+Converted the dashboard greeting from plain text to a gradient background card.
+
+- **Light mode**: `bg-gradient-to-r from-blue-600 to-indigo-600` blue-to-indigo gradient with white text
+- **Dark mode**: `from-blue-500/20 to-indigo-500/20` translucent gradient + `border-blue-500/30` border
+
+### 16.4 Header Gradient Line
+
+Added a 2px gradient line at the bottom of AppHeader:
+
+```html
+<div class="h-0.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 opacity-80" />
+```
+
+### 16.5 Shortcut Icon Color Backgrounds
+
+Applied unique colored circular backgrounds to each shortcut icon.
+
+| Shortcut | Color | Class |
+|----------|-------|-------|
+| Compose Mail | Blue | `bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400` |
+| Start Meeting | Green | `bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400` |
+| Upload File | Amber | `bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400` |
+| Git Repos | Purple | `bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400` |
+
+### 16.6 Widget Card Header Color Icons
+
+Added colored SVG icons next to each dashboard widget card title to visually distinguish services.
+
+| Widget | Icon | Color |
+|--------|------|-------|
+| Recent Mail | mail (envelope) | `text-blue-500` |
+| Recent Git | git-branch | `text-purple-500` |
+| Active Meetings | video | `text-green-500` |
+| Game Servers | gamepad-2 | `text-orange-500` |
+| Storage | hard-drive | `text-teal-500` |
+
+### 16.7 Modified Files (14 total)
+
+| # | File | Change |
+|---|------|--------|
+| 1 | `frontend/assets/css/main.css` | Color palette renewal |
+| 2 | `frontend/components/ui/Card.vue` | Hover shadow transition |
+| 3 | `frontend/components/ui/Button.vue` | Click feedback, shadow |
+| 4 | `frontend/components/layout/AppHeader.vue` | Gradient line |
+| 5 | `frontend/pages/index.vue` | Widget gap widened (gap-4 → gap-5) |
+| 6 | `frontend/components/dashboard/DashboardGreeting.vue` | Gradient hero card |
+| 7 | `frontend/components/dashboard/DashboardServiceStatus.vue` | Checking state pulse animation |
+| 8 | `frontend/components/dashboard/DashboardShortcuts.vue` | Icon colored circular backgrounds |
+| 9–13 | `Dashboard{RecentMail,RecentGit,Meetings,GameServers,Storage}.vue` | Header color icons |
+| 14 | `frontend/tailwind.config.ts` | Keyframes extension (if needed) |
+
+---
+
+## 17. Phase 12: Infrastructure Security Hardening (Complete)
+
+Conducted a full-server vulnerability scan and remediated all findings with zero service downtime.
+
+### 17.1 Scan Targets
+
+| Server | Host | Scan Items |
+|--------|------|------------|
+| Nginx Reverse Proxy | 192.168.0.150 | SSL/TLS, security headers, firewall, OS patches |
+| Mail Server | 192.168.0.250 | SSL/TLS, SELinux, firewall, OS patches |
+| Docker Host (WSL2) | 192.168.0.50 | Docker images, unused resources |
+| Public Domains (6) | namgun/meet/file/game/mail/git | SSL certificates, TLS versions, security headers |
+
+### 17.2 CSP (Content-Security-Policy) Headers Added
+
+All sites were missing CSP headers. Site-specific policies were applied.
+
+| Site | Key CSP Policy |
+|------|---------------|
+| namgun.or.kr | `frame-src https://meet.namgun.or.kr https://mail.namgun.or.kr` (allow meeting/mail iframes) |
+| file.namgun.or.kr | `img-src 'self' data: blob:` (allow file preview blobs) |
+| game.namgun.or.kr | Default `default-src 'self'` |
+| git.namgun.or.kr | `img-src 'self' data: https:; font-src 'self' data:` (allow external images/fonts) |
+| auth.namgun.or.kr | Default `default-src 'self'` |
+
+### 17.3 Missing Security Headers Remediated
+
+| Site | Headers Added |
+|------|--------------|
+| file.namgun.or.kr | `X-XSS-Protection`, `Permissions-Policy` |
+| game.namgun.or.kr | `X-XSS-Protection`, `Permissions-Policy`, `server_tokens off`, `proxy_hide_header Server` |
+| meet.namgun.or.kr | `Permissions-Policy` (`camera=(self), microphone=(self)` — for BBB mic/camera) |
+
+### 17.4 Firewall (firewalld) Activation
+
+| Server | Previous State | Action | Allowed Ports |
+|--------|---------------|--------|---------------|
+| Nginx (192.168.0.150) | masked (inactive) | `systemctl unmask && enable --now` | http, https, ssh, 9090 (cockpit) |
+| Mail (192.168.0.250) | not loaded | `dnf install && enable --now` | ssh, smtp(25), smtps(465), submission(587), imaps(993), https(443), 8080 |
+
+### 17.5 SELinux Status Improvement
+
+| Server | Before | Action | Notes |
+|--------|--------|--------|-------|
+| Nginx (192.168.0.150) | Enforcing | Maintained | Normal |
+| Mail (192.168.0.250) | Disabled | → Permissive (config changed, effective after reboot) | `/etc/selinux/config` modified |
+
+### 17.6 OS Security Patches Applied
+
+| Server | Patch Details |
+|--------|--------------|
+| Nginx (192.168.0.150) | openssl, python3-urllib3, kernel, and 90+ packages security updates |
+| Mail (192.168.0.250) | kernel, python3-urllib3, and other security updates |
+
+> **Note**: Kernel updates applied. New kernel will load upon reboot (services running without interruption).
+
+### 17.7 Temporary Test Page Cleanup
+
+Cleaned up all resources related to `test.namgun.or.kr:47264` that were created for firewall testing during Phase 0.
+
+| Item | Action |
+|------|--------|
+| Nginx config | Deleted `test.namgun.or.kr.conf`, `test-acme.conf` |
+| TLS certificate | `certbot delete --cert-name test.namgun.or.kr` |
+| SELinux port | `semanage port -d -t http_port_t -p tcp 47264` |
+| Web directory | Deleted `/var/www/test-page` |
+
+### 17.8 Docker Cleanup
+
+| Item | Action |
+|------|--------|
+| Unused images | `docker image prune -a` (~2GB reclaimed) |
+| Build cache | `docker builder prune -a` |
+
+---
+
+## 18. Key Troubleshooting Summary
 
 | # | Problem | Cause | Resolution |
 | 23 | Git recent-commits response delay | Sequential fetching from 50 repos | Reduced to 5 repos + asyncio.gather parallel + 120s in-memory TTL cache |
@@ -917,16 +1084,18 @@ Renewed the dashboard from a basic ServiceGrid (6 service cards) to a comprehens
 
 ---
 
-## 17. Remaining Tasks
+## 19. Remaining Tasks
 
-### 17.1 Immediate Action Required
+### 19.1 Immediate Action Required
 
 - [x] Confirm DKIM `dkim=pass` (after DNS cache expiry)
 - [ ] Register PTR record (SK Broadband, `211.244.144.69 → mail.namgun.or.kr`)
 - [ ] Add SPF TXT record for `mail.namgun.or.kr` (resolve SPF_HELO_NONE)
 - [ ] Set Authentik account passwords: tsha, nahee14, kkb
+- [ ] Reboot Nginx/Mail servers for kernel update (security patches applied, new kernel pending load)
+- [ ] Transition mail server SELinux to Enforcing (verify services after reboot)
 
-### 17.2 Completed Items
+### 19.2 Completed Items
 
 | Item | Completed Phase |
 |------|----------------|
@@ -955,8 +1124,17 @@ Renewed the dashboard from a basic ServiceGrid (6 service cards) to a comprehens
 | Storage capacity percentage gauge | Phase 10 |
 | Git recent-commits in-memory cache | Phase 10 |
 | Stalwart health check URL fix | Phase 10 |
+| Color palette separation (primary/accent/ring) | Phase 11 |
+| Card/button hover and click interactions | Phase 11 |
+| Gradient hero card + header line | Phase 11 |
+| Dashboard widget color icons | Phase 11 |
+| CSP headers applied across all sites | Phase 12 |
+| firewalld firewall activation (Nginx + Mail) | Phase 12 |
+| OS security patches applied (Nginx + Mail) | Phase 12 |
+| Temporary test page cleanup (test.namgun.or.kr) | Phase 12 |
+| Docker unused image/cache cleanup | Phase 12 |
 
-### 17.3 Future Plans
+### 19.3 Future Plans
 
 | Item | Description | Expected Technology Stack |
 |------|-------------|--------------------------|
@@ -968,7 +1146,7 @@ Renewed the dashboard from a basic ServiceGrid (6 service cards) to a comprehens
 
 ---
 
-## 18. Technology Stack Summary
+## 20. Technology Stack Summary
 
 | Category | Technology |
 |----------|------------|
@@ -990,9 +1168,9 @@ Renewed the dashboard from a basic ServiceGrid (6 service cards) to a comprehens
 
 ---
 
-## 19. Security Considerations
+## 21. Security Considerations
 
-### 19.1 Applied Security Policies
+### 21.1 Applied Security Policies
 
 - ISMS-P compliant security headers applied across all sites
 - TLS 1.2+ enforced (HSTS preload)
@@ -1003,13 +1181,16 @@ Renewed the dashboard from a basic ServiceGrid (6 service cards) to a comprehens
 - Signed session cookies (itsdangerous, httponly, secure, samesite=lax)
 - Filesystem path traversal prevention (resolve + prefix verification)
 - Redirect URL domain whitelist (`*.namgun.or.kr`)
+- CSP (Content-Security-Policy) applied across all sites (Phase 12)
+- firewalld firewall activated on all servers (Phase 12)
+- Regular OS security patch application (Phase 12)
 
-### 19.2 Planned Security Enhancements
+### 21.2 Planned Security Enhancements
 
 - Complete reverse DNS verification through PTR record registration
-- Review and addition of CSP (Content-Security-Policy) headers
 - Strengthen Authentik MFA (multi-factor authentication) policies
+- Mail server SELinux Permissive → Enforcing transition (requires reboot verification)
 
 ---
 
-*End of document. Last updated: 2026-02-21*
+*End of document. Last updated: 2026-02-22*

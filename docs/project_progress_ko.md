@@ -14,6 +14,7 @@
 | v1.1 | 2026-02-19 | 남기완 | Phase 3 ~ Phase 6 완료 기준 갱신 |
 | v1.2 | 2026-02-21 | 남기완 | Phase 6.5(인증 게이트웨이 전환), Phase 7(회원가입·관리자 패널) 추가 |
 | v1.3 | 2026-02-21 | 남기완 | Phase 8(BBB 새 탭 회의), Phase 9(Gitea 포털 내재화), Phase 10(대시보드 리뉴얼) 추가 |
+| v1.4 | 2026-02-22 | 남기완 | Phase 11(비주얼 리프레시), Phase 12(인프라 보안 강화) 추가 |
 
 ---
 
@@ -26,7 +27,7 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 - 모든 서비스에 대한 SSO 인증 통합 (OIDC / LDAP)
 - ISMS-P 보안 기준에 준하는 인프라 구성
 - 셀프 호스팅 기반의 데이터 주권 확보
-- 단계적 서비스 확장 (Phase 0 ~ Phase 10)
+- 단계적 서비스 확장 (Phase 0 ~ Phase 12)
 
 ---
 
@@ -46,6 +47,8 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 | Phase 8 | BBB 새 탭 회의 참여 | **완료** | — | 새 탭 회의 참여, 자동 닫힘, Greenlight 차단, 학습분석 |
 | Phase 9 | Gitea 포털 내재화 | **완료** | — | 저장소 탐색, 코드 뷰어(구문 강조), 이슈/PR 관리 (v0.5.0) |
 | Phase 10 | 대시보드 홈화면 리뉴얼 | **완료** | — | 8개 위젯, 게임서버 상태, 스토리지 게이지, Git 캐시 (v0.5.1) |
+| Phase 11 | 비주얼 리프레시 | **완료** | — | 색상 팔레트 분리, 카드/버튼 인터랙션, 그라디언트 히어로·헤더, 위젯 색상 아이콘 (v0.5.2) |
+| Phase 12 | 인프라 보안 강화 | **완료** | — | 전서버 취약점 스캔, CSP 헤더, firewalld 활성화, OS 보안 패치, test 페이지 정리 |
 
 ---
 
@@ -951,7 +954,171 @@ Gitea API를 포털 백엔드에서 래핑하여, 사용자가 포털 내에서 
 
 ---
 
-## 16. 핵심 트러블슈팅 정리
+## 16. Phase 11: 비주얼 리프레시 (완료, v0.5.2)
+
+기존 포털 UI의 단조로운 시각 요소를 개선하여, 색상 팔레트 분리, 카드/버튼 인터랙션, 그라디언트 히어로 카드, 위젯별 색상 아이콘을 적용하였다.
+
+### 16.1 색상 팔레트 리뉴얼
+
+기존에 `primary`, `accent`, `secondary`, `muted`가 모두 동일한 회색 계열(HSL `210 40% 96.1%`)이어서 시각적 구분이 불가능했던 문제를 해결하였다.
+
+**Light 모드 핵심 변경** (`frontend/assets/css/main.css`):
+
+| 변수 | 이전 | 이후 | 설명 |
+|------|------|------|------|
+| `--primary` | `222.2 47.4% 11.2%` (거의 검정) | `221 83% 53%` (#3B82F6) | 선명한 블루 |
+| `--accent` | `210 40% 96.1%` (primary와 동일) | `214 95% 93%` (#DBEAFE) | 연한 블루 |
+| `--ring` | `222.2 84% 4.9%` | `221 83% 53%` | primary 맞춤 |
+
+**Dark 모드 핵심 변경**:
+
+| 변수 | 이전 | 이후 |
+|------|------|------|
+| `--primary` | `210 40% 98%` | `217 91% 60%` (#60A5FA) |
+| `--accent` | `217.2 32.6% 17.5%` | `217 50% 20%` |
+| `--ring` | `212.7 26.8% 83.9%` | `217 91% 60%` |
+
+`secondary`, `muted`는 중립 회색 역할을 유지하기 위해 변경하지 않았다.
+
+### 16.2 카드/버튼 인터랙션
+
+| 컴포넌트 | 변경 내용 |
+|---------|----------|
+| `Card.vue` | `hover:shadow-md transition-shadow duration-200` 추가 — 마우스 오버 시 그림자 전환 |
+| `Button.vue` | `active:scale-[0.98]` 클릭 축소 피드백, `transition-all`, default variant에 `shadow-sm hover:shadow-md` |
+
+### 16.3 그라디언트 히어로 카드
+
+대시보드 인사말을 플레인 텍스트에서 그라디언트 배경 카드로 전환하였다.
+
+- **Light 모드**: `bg-gradient-to-r from-blue-600 to-indigo-600` 블루→인디고 그라디언트, 흰 텍스트
+- **Dark 모드**: `from-blue-500/20 to-indigo-500/20` 반투명 그라디언트 + `border-blue-500/30` 보더
+
+### 16.4 헤더 그라디언트 라인
+
+AppHeader 하단에 2px 그라디언트 라인 추가:
+
+```html
+<div class="h-0.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 opacity-80" />
+```
+
+### 16.5 바로가기 아이콘 색상 배경
+
+각 바로가기 아이콘에 고유한 색상의 원형 배경을 적용하였다.
+
+| 바로가기 | 색상 | 클래스 |
+|---------|------|--------|
+| 메일 쓰기 | 블루 | `bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400` |
+| 회의 시작 | 그린 | `bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400` |
+| 파일 업로드 | 앰버 | `bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400` |
+| Git 저장소 | 퍼플 | `bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400` |
+
+### 16.6 위젯 카드 헤더 색상 아이콘
+
+대시보드 위젯 카드의 제목 옆에 각 서비스를 상징하는 색상 SVG 아이콘을 추가하였다.
+
+| 위젯 | 아이콘 | 색상 |
+|------|--------|------|
+| 최근 메일 | mail (봉투) | `text-blue-500` |
+| 최근 Git | git-branch | `text-purple-500` |
+| 진행 중인 회의 | video | `text-green-500` |
+| 게임서버 | gamepad-2 | `text-orange-500` |
+| 스토리지 | hard-drive | `text-teal-500` |
+
+### 16.7 수정 파일 목록 (14개)
+
+| # | 파일 | 변경 |
+|---|------|------|
+| 1 | `frontend/assets/css/main.css` | 색상 팔레트 리뉴얼 |
+| 2 | `frontend/components/ui/Card.vue` | 호버 그림자 전환 |
+| 3 | `frontend/components/ui/Button.vue` | 클릭 피드백, 그림자 |
+| 4 | `frontend/components/layout/AppHeader.vue` | 그라디언트 라인 |
+| 5 | `frontend/pages/index.vue` | 위젯 간격 확대 (gap-4 → gap-5) |
+| 6 | `frontend/components/dashboard/DashboardGreeting.vue` | 그라디언트 히어로 카드 |
+| 7 | `frontend/components/dashboard/DashboardServiceStatus.vue` | checking 상태 pulse 애니메이션 |
+| 8 | `frontend/components/dashboard/DashboardShortcuts.vue` | 아이콘 색상 원형 배경 |
+| 9–13 | `Dashboard{RecentMail,RecentGit,Meetings,GameServers,Storage}.vue` | 헤더 색상 아이콘 |
+| 14 | `frontend/tailwind.config.ts` | keyframes 확장 (필요 시) |
+
+---
+
+## 17. Phase 12: 인프라 보안 강화 (완료)
+
+전 서버 취약점 스캔을 실시하고, 발견된 문제점을 서비스 무중단으로 즉시 조치하였다.
+
+### 17.1 취약점 스캔 대상
+
+| 서버 | 호스트 | 스캔 항목 |
+|------|--------|----------|
+| Nginx 리버스 프록시 | 192.168.0.150 | SSL/TLS, 보안 헤더, 방화벽, OS 패치 |
+| 메일서버 | 192.168.0.250 | SSL/TLS, SELinux, 방화벽, OS 패치 |
+| Docker 호스트 (WSL2) | 192.168.0.50 | Docker 이미지, 미사용 리소스 |
+| 공개 도메인 (6개) | namgun/meet/file/game/mail/git | SSL 인증서, TLS 버전, 보안 헤더 |
+
+### 17.2 CSP(Content-Security-Policy) 헤더 추가
+
+전 사이트에 CSP 헤더가 누락되어 있었으며, 각 사이트 특성에 맞는 정책을 적용하였다.
+
+| 사이트 | CSP 주요 정책 |
+|--------|-------------|
+| namgun.or.kr | `frame-src https://meet.namgun.or.kr https://mail.namgun.or.kr` (회의/메일 iframe 허용) |
+| file.namgun.or.kr | `img-src 'self' data: blob:` (파일 미리보기 blob 허용) |
+| game.namgun.or.kr | 기본 `default-src 'self'` |
+| git.namgun.or.kr | `img-src 'self' data: https:; font-src 'self' data:` (외부 이미지/폰트 허용) |
+| auth.namgun.or.kr | 기본 `default-src 'self'` |
+
+### 17.3 누락된 보안 헤더 보완
+
+| 사이트 | 추가된 헤더 |
+|--------|-----------|
+| file.namgun.or.kr | `X-XSS-Protection`, `Permissions-Policy` |
+| game.namgun.or.kr | `X-XSS-Protection`, `Permissions-Policy`, `server_tokens off`, `proxy_hide_header Server` |
+| meet.namgun.or.kr | `Permissions-Policy` (`camera=(self), microphone=(self)` — BBB 마이크/카메라 허용) |
+
+### 17.4 방화벽 (firewalld) 활성화
+
+| 서버 | 이전 상태 | 조치 | 허용 포트 |
+|------|----------|------|----------|
+| Nginx (192.168.0.150) | masked (비활성) | `systemctl unmask && enable --now` | http, https, ssh, 9090(cockpit) |
+| Mail (192.168.0.250) | not loaded | `dnf install && enable --now` | ssh, smtp(25), smtps(465), submission(587), imaps(993), https(443), 8080 |
+
+### 17.5 SELinux 상태 개선
+
+| 서버 | 이전 | 조치 | 비고 |
+|------|------|------|------|
+| Nginx (192.168.0.150) | Enforcing | 유지 | 정상 |
+| Mail (192.168.0.250) | Disabled | → Permissive (설정 변경, 재부팅 시 적용) | `/etc/selinux/config` 수정 |
+
+### 17.6 OS 보안 패치 적용
+
+| 서버 | 패치 내용 |
+|------|----------|
+| Nginx (192.168.0.150) | openssl, python3-urllib3, kernel 등 90+ 패키지 보안 업데이트 |
+| Mail (192.168.0.250) | kernel, python3-urllib3 등 보안 업데이트 |
+
+> **참고**: 커널 업데이트 적용 완료. 재부팅 시 신규 커널 로드 예정 (서비스 무중단 운영 중).
+
+### 17.7 임시 테스트 페이지 정리
+
+Phase 0에서 방화벽 테스트용으로 생성했던 `test.namgun.or.kr:47264` 관련 자원을 모두 정리하였다.
+
+| 항목 | 조치 |
+|------|------|
+| Nginx 설정 | `test.namgun.or.kr.conf`, `test-acme.conf` 삭제 |
+| TLS 인증서 | `certbot delete --cert-name test.namgun.or.kr` |
+| SELinux 포트 | `semanage port -d -t http_port_t -p tcp 47264` |
+| 웹 디렉토리 | `/var/www/test-page` 삭제 |
+
+### 17.8 Docker 정리
+
+| 항목 | 조치 |
+|------|------|
+| 미사용 이미지 | `docker image prune -a` (약 2GB 회수) |
+| 빌드 캐시 | `docker builder prune -a` |
+
+---
+
+## 18. 핵심 트러블슈팅 정리
 
 | # | 문제 | 원인 | 해결 방법 |
 | 23 | Git recent-commits 응답 지연 | 50개 저장소를 순차 조회 | 5개로 축소 + asyncio.gather 병렬 + 120초 인메모리 TTL 캐시 |
@@ -983,16 +1150,18 @@ Gitea API를 포털 백엔드에서 래핑하여, 사용자가 포털 내에서 
 
 ---
 
-## 17. 잔여 작업 항목
+## 19. 잔여 작업 항목
 
-### 17.1 즉시 조치 필요
+### 19.1 즉시 조치 필요
 
 - [x] DKIM `dkim=pass` 확인 (DNS 캐시 만료 후)
 - [ ] PTR 레코드 등록 (SK 브로드밴드, `211.244.144.69 → mail.namgun.or.kr`)
 - [ ] `mail.namgun.or.kr`에 대한 SPF TXT 레코드 추가 (SPF_HELO_NONE 해결)
 - [ ] Authentik 계정 비밀번호 설정: tsha, nahee14, kkb
+- [ ] Nginx/Mail 서버 커널 재부팅 (보안 패치 적용 완료, 신규 커널 로드 필요)
+- [ ] 메일서버 SELinux Enforcing 전환 (재부팅 후 서비스 정상 확인 필요)
 
-### 17.2 완료된 항목
+### 19.2 완료된 항목
 
 | 항목 | 완료 단계 |
 |------|----------|
@@ -1021,8 +1190,17 @@ Gitea API를 포털 백엔드에서 래핑하여, 사용자가 포털 내에서 
 | 스토리지 용량 퍼센트 게이지 | Phase 10 |
 | Git recent-commits 인메모리 캐시 | Phase 10 |
 | Stalwart 헬스체크 URL 수정 | Phase 10 |
+| 색상 팔레트 분리 (primary/accent/ring) | Phase 11 |
+| 카드/버튼 호버·클릭 인터랙션 | Phase 11 |
+| 그라디언트 히어로 카드 + 헤더 라인 | Phase 11 |
+| 대시보드 위젯 색상 아이콘 | Phase 11 |
+| CSP 헤더 전 사이트 적용 | Phase 12 |
+| firewalld 방화벽 활성화 (Nginx + Mail) | Phase 12 |
+| OS 보안 패치 적용 (Nginx + Mail) | Phase 12 |
+| 임시 테스트 페이지 정리 (test.namgun.or.kr) | Phase 12 |
+| Docker 미사용 이미지/캐시 정리 | Phase 12 |
 
-### 17.3 향후 계획
+### 19.3 향후 계획
 
 | 항목 | 내용 | 예상 기술 스택 |
 |------|------|---------------|
@@ -1034,7 +1212,7 @@ Gitea API를 포털 백엔드에서 래핑하여, 사용자가 포털 내에서 
 
 ---
 
-## 18. 기술 스택 요약
+## 20. 기술 스택 요약
 
 | 분류 | 기술 |
 |------|------|
@@ -1056,9 +1234,9 @@ Gitea API를 포털 백엔드에서 래핑하여, 사용자가 포털 내에서 
 
 ---
 
-## 19. 보안 고려사항
+## 21. 보안 고려사항
 
-### 19.1 적용된 보안 정책
+### 21.1 적용된 보안 정책
 
 - ISMS-P 기준 보안 헤더 전 사이트 적용
 - TLS 1.2+ 강제 (HSTS preload)
@@ -1069,13 +1247,16 @@ Gitea API를 포털 백엔드에서 래핑하여, 사용자가 포털 내에서 
 - 서명된 세션 쿠키 (itsdangerous, httponly, secure, samesite=lax)
 - 파일 시스템 path traversal 방지 (resolve + prefix 검증)
 - 리다이렉트 URL 도메인 화이트리스트 (`*.namgun.or.kr`)
+- CSP(Content-Security-Policy) 전 사이트 적용 (Phase 12)
+- firewalld 방화벽 전 서버 활성화 (Phase 12)
+- 정기 OS 보안 패치 적용 (Phase 12)
 
-### 19.2 계획된 보안 강화
+### 21.2 계획된 보안 강화
 
 - PTR 레코드 등록으로 역방향 DNS 검증 완성
-- CSP(Content-Security-Policy) 헤더 추가 검토
 - Authentik MFA(다중 인증) 정책 강화
+- 메일서버 SELinux Permissive → Enforcing 전환 (재부팅 후 검증 필요)
 
 ---
 
-*문서 끝. 최종 갱신: 2026-02-21*
+*문서 끝. 최종 갱신: 2026-02-22*

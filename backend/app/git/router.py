@@ -1,5 +1,8 @@
 """Git (Gitea) API router."""
 
+import asyncio
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth.deps import get_current_user
@@ -65,23 +68,21 @@ def _map_labels(labels: list[dict] | None) -> list[Label]:
     ]
 
 
-# ─── Recent Commits (cross-repo) ───
+# ─── Recent Commits (cross-repo, cached) ───
+
+_recent_commits_cache: list[RecentCommit] = []
+_recent_commits_ts: float = 0
+_RECENT_COMMITS_TTL = 120  # seconds
 
 
-@router.get("/recent-commits", response_model=list[RecentCommit])
-async def recent_commits(
-    limit: int = Query(5, ge=1, le=20),
-    user: User = Depends(get_current_user),
-):
-    """Aggregate recent commits across all repos, sorted by date."""
-    import asyncio
-
+async def _refresh_recent_commits() -> list[RecentCommit]:
+    """Fetch recent commits from top 5 repos in parallel."""
     try:
-        repos, _ = await gitea.search_repos("", 1, 10, "updated")
+        repos, _ = await gitea.search_repos("", 1, 5, "updated")
     except Exception:
         return []
 
-    async def _fetch_repo_commits(r: dict) -> list[RecentCommit]:
+    async def _fetch(r: dict) -> list[RecentCommit]:
         owner = r.get("owner", {}).get("login", "")
         name = r.get("name", "")
         full_name = r.get("full_name", "")
@@ -89,28 +90,36 @@ async def recent_commits(
             return []
         try:
             commits = await gitea.get_commits(owner, name, page=1)
-            result = []
+            out = []
             for c in commits[:3]:
-                commit_data = c.get("commit", {})
-                author_data = commit_data.get("author", {})
-                result.append(
-                    RecentCommit(
-                        repo_full_name=full_name,
-                        repo_name=name,
-                        sha=c.get("sha", ""),
-                        message=commit_data.get("message", ""),
-                        author_name=author_data.get("name", ""),
-                        author_date=author_data.get("date", ""),
-                    )
-                )
-            return result
+                cd = c.get("commit", {})
+                ad = cd.get("author", {})
+                out.append(RecentCommit(
+                    repo_full_name=full_name, repo_name=name,
+                    sha=c.get("sha", ""), message=cd.get("message", ""),
+                    author_name=ad.get("name", ""), author_date=ad.get("date", ""),
+                ))
+            return out
         except Exception:
             return []
 
-    results = await asyncio.gather(*[_fetch_repo_commits(r) for r in repos])
+    results = await asyncio.gather(*[_fetch(r) for r in repos])
     all_commits = [c for batch in results for c in batch]
     all_commits.sort(key=lambda c: c.author_date, reverse=True)
-    return all_commits[:limit]
+    return all_commits[:20]
+
+
+@router.get("/recent-commits", response_model=list[RecentCommit])
+async def recent_commits(
+    limit: int = Query(5, ge=1, le=20),
+    user: User = Depends(get_current_user),
+):
+    global _recent_commits_cache, _recent_commits_ts
+    now = time.monotonic()
+    if now - _recent_commits_ts > _RECENT_COMMITS_TTL or not _recent_commits_cache:
+        _recent_commits_cache = await _refresh_recent_commits()
+        _recent_commits_ts = now
+    return _recent_commits_cache[:limit]
 
 
 # ─── Repositories ───

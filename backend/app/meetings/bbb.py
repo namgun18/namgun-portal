@@ -128,7 +128,12 @@ async def create_meeting(
 
 
 async def get_join_url(
-    meeting_id: str, full_name: str, *, role: str = "VIEWER", password: str | None = None
+    meeting_id: str,
+    full_name: str,
+    *,
+    role: str = "VIEWER",
+    password: str | None = None,
+    logout_url: str | None = None,
 ) -> str | None:
     """Generate a join URL for a meeting."""
     # If no password, fetch meeting info to get the right one
@@ -147,6 +152,8 @@ async def get_join_url(
         "password": password,
         "redirect": "true",
     }
+    if logout_url:
+        params["logoutURL"] = logout_url
     return _build_url("join", params)
 
 

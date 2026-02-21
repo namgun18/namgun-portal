@@ -51,8 +51,6 @@ const loadingMeetings = ref(false)
 const loadingDetail = ref(false)
 const loadingRecordings = ref(false)
 const showCreateModal = ref(false)
-const activeJoinUrl = ref<string | null>(null)
-const activeMeetingName = ref('')
 
 export function useMeetings() {
   async function fetchMeetings() {
@@ -93,20 +91,7 @@ export function useMeetings() {
     const resp = await $fetch<{ joinUrl: string }>(`/api/meetings/${meetingId}/join`, {
       method: 'POST',
     })
-    activeJoinUrl.value = resp.joinUrl
-    const meeting = meetings.value.find(m => m.meetingID === meetingId)
-    activeMeetingName.value = meeting?.meetingName || '화상회의'
-  }
-
-  function leaveMeeting() {
-    activeJoinUrl.value = null
-    activeMeetingName.value = ''
-  }
-
-  function openInNewTab() {
-    if (activeJoinUrl.value) {
-      window.open(activeJoinUrl.value, '_blank')
-    }
+    window.open(resp.joinUrl, '_blank')
   }
 
   async function endMeeting(meetingId: string) {
@@ -147,15 +132,11 @@ export function useMeetings() {
     loadingDetail: readonly(loadingDetail),
     loadingRecordings: readonly(loadingRecordings),
     showCreateModal,
-    activeJoinUrl: readonly(activeJoinUrl),
-    activeMeetingName: readonly(activeMeetingName),
     // Actions
     fetchMeetings,
     fetchMeetingDetail,
     createMeeting,
     joinMeeting,
-    leaveMeeting,
-    openInNewTab,
     endMeeting,
     fetchRecordings,
     deleteRecording,

@@ -1,6 +1,6 @@
 """BBB meetings API router."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.auth.deps import get_current_user
 from app.db.models import User
@@ -150,11 +150,20 @@ async def create_meeting(
 
 
 @router.post("/{meeting_id}/join", response_model=JoinMeetingResponse)
-async def join_meeting(meeting_id: str, user: User = Depends(get_current_user)):
+async def join_meeting(
+    meeting_id: str, request: Request, user: User = Depends(get_current_user)
+):
     """Get join URL for a meeting."""
     display_name = user.display_name or user.username
     role = "MODERATOR" if user.is_admin else "VIEWER"
-    url = await bbb.get_join_url(meeting_id, display_name, role=role)
+    # 회의 종료 시 탭 자동 닫힘 페이지로 리다이렉트
+    origin = f"{request.url.scheme}://{request.url.hostname}"
+    if request.url.port and request.url.port not in (80, 443):
+        origin += f":{request.url.port}"
+    logout_url = f"{origin}/meeting-closed"
+    url = await bbb.get_join_url(
+        meeting_id, display_name, role=role, logout_url=logout_url
+    )
     if not url:
         raise HTTPException(status_code=404, detail="Meeting not found")
     return JoinMeetingResponse(joinUrl=url)

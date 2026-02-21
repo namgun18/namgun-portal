@@ -21,6 +21,8 @@ class StorageInfo(BaseModel):
     personal_used: int  # bytes
     shared_used: int
     total_available: int  # 0 = unlimited
+    total_capacity: int = 0  # disk total bytes
+    disk_used: int = 0  # disk used bytes
 
 
 class MkdirRequest(BaseModel):

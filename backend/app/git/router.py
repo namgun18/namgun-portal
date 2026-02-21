@@ -74,24 +74,26 @@ async def recent_commits(
     user: User = Depends(get_current_user),
 ):
     """Aggregate recent commits across all repos, sorted by date."""
+    import asyncio
+
     try:
-        repos, _ = await gitea.search_repos("", 1, 50, "updated")
+        repos, _ = await gitea.search_repos("", 1, 10, "updated")
     except Exception:
         return []
 
-    all_commits: list[RecentCommit] = []
-    for r in repos:
+    async def _fetch_repo_commits(r: dict) -> list[RecentCommit]:
         owner = r.get("owner", {}).get("login", "")
         name = r.get("name", "")
         full_name = r.get("full_name", "")
         if not owner or not name:
-            continue
+            return []
         try:
             commits = await gitea.get_commits(owner, name, page=1)
+            result = []
             for c in commits[:3]:
                 commit_data = c.get("commit", {})
                 author_data = commit_data.get("author", {})
-                all_commits.append(
+                result.append(
                     RecentCommit(
                         repo_full_name=full_name,
                         repo_name=name,
@@ -101,9 +103,12 @@ async def recent_commits(
                         author_date=author_data.get("date", ""),
                     )
                 )
+            return result
         except Exception:
-            continue
+            return []
 
+    results = await asyncio.gather(*[_fetch_repo_commits(r) for r in repos])
+    all_commits = [c for batch in results for c in batch]
     all_commits.sort(key=lambda c: c.author_date, reverse=True)
     return all_commits[:limit]
 

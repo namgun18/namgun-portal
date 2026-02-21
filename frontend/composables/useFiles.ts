@@ -16,6 +16,8 @@ export interface StorageInfo {
   personal_used: number
   shared_used: number
   total_available: number
+  total_capacity: number
+  disk_used: number
 }
 
 export interface ShareLinkItem {

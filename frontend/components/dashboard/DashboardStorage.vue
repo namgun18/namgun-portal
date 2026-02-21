@@ -5,9 +5,10 @@ const { storageInfo, fetchStorageInfo } = useFiles()
 
 onMounted(fetchStorageInfo)
 
-const totalUsed = computed(() =>
-  (storageInfo.value?.personal_used ?? 0) + (storageInfo.value?.shared_used ?? 0)
-)
+const usedPercent = computed(() => {
+  if (!storageInfo.value || !storageInfo.value.total_capacity) return 0
+  return Math.round(storageInfo.value.disk_used / storageInfo.value.total_capacity * 100)
+})
 </script>
 
 <template>
@@ -25,30 +26,32 @@ const totalUsed = computed(() =>
       </div>
 
       <div v-else class="space-y-3">
-        <div class="flex justify-between text-sm">
-          <span>전체 사용량</span>
-          <span class="font-medium">{{ formatSize(totalUsed) }}</span>
+        <!-- Total usage bar -->
+        <div>
+          <div class="flex justify-between text-sm mb-1.5">
+            <span class="font-medium">{{ usedPercent }}% 사용중</span>
+            <span class="text-muted-foreground">
+              {{ formatSize(storageInfo.disk_used) }} / {{ formatSize(storageInfo.total_capacity) }}
+            </span>
+          </div>
+          <div class="h-2.5 w-full rounded-full bg-muted overflow-hidden">
+            <div
+              class="h-full rounded-full transition-all"
+              :class="usedPercent > 90 ? 'bg-red-500' : usedPercent > 70 ? 'bg-yellow-500' : 'bg-primary'"
+              :style="{ width: `${usedPercent}%` }"
+            />
+          </div>
         </div>
-        <div class="space-y-2">
+
+        <!-- Breakdown -->
+        <div class="space-y-1 pt-1">
           <div class="flex justify-between text-xs text-muted-foreground">
             <span>내 파일</span>
             <span>{{ formatSize(storageInfo.personal_used) }}</span>
           </div>
-          <div class="h-2 w-full rounded-full bg-muted overflow-hidden">
-            <div
-              class="h-full rounded-full bg-primary transition-all"
-              :style="{ width: totalUsed > 0 ? `${Math.round(storageInfo.personal_used / totalUsed * 100)}%` : '0%' }"
-            />
-          </div>
           <div class="flex justify-between text-xs text-muted-foreground">
             <span>공유 파일</span>
             <span>{{ formatSize(storageInfo.shared_used) }}</span>
-          </div>
-          <div class="h-2 w-full rounded-full bg-muted overflow-hidden">
-            <div
-              class="h-full rounded-full bg-blue-500 transition-all"
-              :style="{ width: totalUsed > 0 ? `${Math.round(storageInfo.shared_used / totalUsed * 100)}%` : '0%' }"
-            />
           </div>
         </div>
       </div>

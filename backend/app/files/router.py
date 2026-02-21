@@ -284,7 +284,22 @@ async def storage_info(user: User = Depends(get_current_user)):
         asyncio.to_thread(fs.get_dir_size, personal_path),
         asyncio.to_thread(fs.get_dir_size, shared_path),
     )
-    return StorageInfo(personal_used=personal, shared_used=shared, total_available=0)
+    # Disk capacity via shutil (instant, no tree walk)
+    import shutil
+    try:
+        usage = shutil.disk_usage(settings.storage_root)
+        total_capacity = usage.total
+        disk_used = usage.used
+    except OSError:
+        total_capacity = 0
+        disk_used = 0
+    return StorageInfo(
+        personal_used=personal,
+        shared_used=shared,
+        total_available=0,
+        total_capacity=total_capacity,
+        disk_used=disk_used,
+    )
 
 
 # ─── Share links ───

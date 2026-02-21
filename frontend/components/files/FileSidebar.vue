@@ -37,9 +37,9 @@ function formatSize(bytes: number) {
   return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i]
 }
 
-const totalUsed = computed(() => {
-  if (!storageInfo.value) return 0
-  return storageInfo.value.personal_used + storageInfo.value.shared_used
+const usedPercent = computed(() => {
+  if (!storageInfo.value || !storageInfo.value.total_capacity) return 0
+  return Math.round(storageInfo.value.disk_used / storageInfo.value.total_capacity * 100)
 })
 </script>
 
@@ -78,8 +78,18 @@ const totalUsed = computed(() => {
 
     <!-- Storage usage -->
     <div v-if="storageInfo" class="p-3 border-t">
-      <div class="text-xs text-muted-foreground mb-2">사용량</div>
-      <div class="space-y-1.5">
+      <div class="flex justify-between text-xs text-muted-foreground mb-1.5">
+        <span>스토리지</span>
+        <span v-if="storageInfo.total_capacity">{{ usedPercent }}%</span>
+      </div>
+      <div v-if="storageInfo.total_capacity" class="h-1.5 w-full rounded-full bg-muted overflow-hidden mb-2">
+        <div
+          class="h-full rounded-full transition-all"
+          :class="usedPercent > 90 ? 'bg-red-500' : usedPercent > 70 ? 'bg-yellow-500' : 'bg-primary'"
+          :style="{ width: `${usedPercent}%` }"
+        />
+      </div>
+      <div class="space-y-1">
         <div class="flex justify-between text-xs">
           <span>내 파일</span>
           <span>{{ formatSize(storageInfo.personal_used) }}</span>
@@ -88,8 +98,9 @@ const totalUsed = computed(() => {
           <span>공유</span>
           <span>{{ formatSize(storageInfo.shared_used) }}</span>
         </div>
-        <div class="text-xs font-medium mt-1">
-          총 {{ formatSize(totalUsed) }}
+        <div v-if="storageInfo.total_capacity" class="flex justify-between text-xs font-medium mt-1">
+          <span>전체</span>
+          <span>{{ formatSize(storageInfo.disk_used) }} / {{ formatSize(storageInfo.total_capacity) }}</span>
         </div>
       </div>
     </div>

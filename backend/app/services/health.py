@@ -35,7 +35,7 @@ SERVICE_DEFS = [
     },
     {
         "name": "Stalwart Mail",
-        "health_url": "http://192.168.0.250:8080/healthz",
+        "health_url": "http://192.168.0.250:8080/health/liveness",
         "external_url": "https://mail.namgun.or.kr",
         "internal_only": True,
     },

@@ -14,7 +14,9 @@ signer = URLSafeTimedSerializer(settings.secret_key)
 
 SESSION_COOKIE = "portal_session"
 PKCE_COOKIE = "portal_pkce"
-SESSION_MAX_AGE = 86400 * 7  # 7 days
+SESSION_MAX_AGE_DEFAULT = 3600 * 8    # 8 hours
+SESSION_MAX_AGE_REMEMBER = 86400 * 30  # 30 days
+SESSION_MAX_AGE = SESSION_MAX_AGE_REMEMBER  # max for unsign validation
 
 
 def sign_value(data: dict) -> str:

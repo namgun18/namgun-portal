@@ -6,6 +6,7 @@ const route = useRoute()
 
 const username = ref('')
 const password = ref('')
+const rememberMe = ref(false)
 const error = ref('')
 const submitting = ref(false)
 
@@ -40,7 +41,7 @@ async function handleSubmit() {
   submitting.value = true
   error.value = ''
   try {
-    await nativeLogin(username.value.trim(), password.value)
+    await nativeLogin(username.value.trim(), password.value, rememberMe.value)
     const dest = redirectTo.value
     if (dest.startsWith('https://') || dest.startsWith('/oauth/')) {
       window.location.href = dest
@@ -105,6 +106,16 @@ async function handleSubmit() {
           placeholder="비밀번호"
           class="w-full px-3 py-2.5 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
         />
+      </div>
+
+      <div class="flex items-center gap-2">
+        <input
+          id="rememberMe"
+          v-model="rememberMe"
+          type="checkbox"
+          class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/50"
+        />
+        <label for="rememberMe" class="text-sm text-muted-foreground select-none cursor-pointer">로그인 상태 유지</label>
       </div>
 
       <p v-if="error" class="text-sm text-destructive">{{ error }}</p>

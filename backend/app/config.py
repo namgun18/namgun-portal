@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     stalwart_admin_user: str = "admin"
     stalwart_admin_password: str = ""
 
+    # SMTP (noreply sender)
+    smtp_host: str = "mail.namgun.or.kr"
+    smtp_port: int = 587
+    smtp_user: str = "noreply@namgun.or.kr"
+    smtp_password: str = ""
+    smtp_from: str = "noreply@namgun.or.kr"
+
     # BigBlueButton
     bbb_url: str = "https://meet.namgun.or.kr/bigbluebutton/api"
     bbb_secret: str = ""

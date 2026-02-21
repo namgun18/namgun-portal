@@ -15,6 +15,7 @@ from app.meetings.router import router as meetings_router
 from app.admin.router import router as admin_router
 from app.git.router import router as git_router
 from app.dashboard.router import router as dashboard_router
+from app.lab.router import router as lab_router
 
 settings = get_settings()
 _health_task = None
@@ -55,6 +56,7 @@ app.include_router(meetings_router)
 app.include_router(admin_router)
 app.include_router(git_router)
 app.include_router(dashboard_router)
+app.include_router(lab_router)
 
 
 @app.get("/api/health")

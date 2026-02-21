@@ -87,7 +87,8 @@ async function handleSubmit() {
         <p class="font-medium text-green-800 dark:text-green-200">가입 신청 완료</p>
       </div>
       <p class="text-sm text-green-700 dark:text-green-300">
-        관리자 승인 후 로그인이 가능합니다. 승인이 완료되면 서비스를 이용하실 수 있습니다.
+        복구 이메일로 인증 링크를 전송했습니다. 이메일을 확인하여 인증을 완료해주세요.
+        인증 완료 후 관리자 승인이 이루어지면 로그인이 가능합니다.
       </p>
       <NuxtLink
         to="/login"

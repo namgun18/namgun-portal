@@ -20,6 +20,7 @@ class UserResponse(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+    remember_me: bool = False
 
 
 class RegisterRequest(BaseModel):

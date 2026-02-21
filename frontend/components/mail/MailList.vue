@@ -14,7 +14,44 @@ const {
   nextPage,
   prevPage,
   limit,
+  searchQuery,
+  setSearchQuery,
+  selectedIds,
+  toggleSelect,
+  selectAll,
+  deselectAll,
+  bulkAction,
 } = useMail()
+
+const hasSelection = computed(() => selectedIds.value.size > 0)
+const allSelected = computed(() =>
+  messages.value.length > 0 && messages.value.every(m => selectedIds.value.has(m.id))
+)
+
+function handleSelectAll() {
+  if (allSelected.value) deselectAll()
+  else selectAll()
+}
+
+function handleCheckbox(e: Event, id: string) {
+  e.stopPropagation()
+  toggleSelect(id)
+}
+
+const localSearch = ref('')
+let searchTimeout: ReturnType<typeof setTimeout> | null = null
+
+function handleSearchInput() {
+  if (searchTimeout) clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => {
+    setSearchQuery(localSearch.value)
+  }, 300)
+}
+
+function clearSearch() {
+  localSearch.value = ''
+  setSearchQuery('')
+}
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return ''
@@ -50,6 +87,48 @@ function handleReadClick(e: Event, id: string) {
 
 <template>
   <div class="flex flex-col flex-1 min-w-0">
+    <!-- Search bar -->
+    <div class="px-3 sm:px-4 py-2 border-b">
+      <div class="relative">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground">
+          <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        <input
+          v-model="localSearch"
+          @input="handleSearchInput"
+          type="text"
+          placeholder="메일 검색..."
+          class="w-full pl-9 pr-8 py-1.5 text-sm bg-muted/50 border-0 rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+        <button
+          v-if="localSearch"
+          @click="clearSearch"
+          class="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Bulk action bar -->
+    <div v-if="hasSelection" class="flex items-center gap-2 px-3 sm:px-4 py-2 border-b bg-primary/5">
+      <input
+        type="checkbox"
+        :checked="allSelected"
+        @change="handleSelectAll"
+        class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/50"
+      />
+      <span class="text-sm text-muted-foreground">{{ selectedIds.size }}건 선택</span>
+      <div class="flex items-center gap-1 ml-auto">
+        <button @click="bulkAction('read')" class="px-2 py-1 text-xs rounded hover:bg-accent" title="읽음 표시">읽음</button>
+        <button @click="bulkAction('unread')" class="px-2 py-1 text-xs rounded hover:bg-accent" title="안읽음 표시">안읽음</button>
+        <button @click="bulkAction('delete')" class="px-2 py-1 text-xs rounded hover:bg-accent text-destructive" title="삭제">삭제</button>
+        <button @click="deselectAll" class="px-2 py-1 text-xs rounded hover:bg-accent" title="선택 해제">취소</button>
+      </div>
+    </div>
+
     <!-- Loading -->
     <div v-if="loadingMessages" class="flex-1 p-4 space-y-2">
       <div v-for="i in 8" :key="i" class="h-16 bg-muted/50 rounded animate-pulse" />
@@ -75,19 +154,28 @@ function handleReadClick(e: Event, id: string) {
           msg.is_unread ? 'bg-primary/5' : '',
         ]"
       >
-        <!-- Unread dot -->
-        <div class="pt-1.5 shrink-0 w-2">
-          <div
-            v-if="msg.is_unread"
-            class="w-2 h-2 rounded-full bg-primary"
-            title="읽지 않음"
-            @click="handleReadClick($event, msg.id)"
+        <!-- Checkbox / Unread dot -->
+        <div class="pt-1 shrink-0 w-5 flex items-center justify-center">
+          <input
+            v-if="hasSelection"
+            type="checkbox"
+            :checked="selectedIds.has(msg.id)"
+            @click="handleCheckbox($event, msg.id)"
+            class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/50"
           />
-          <div
-            v-else
-            class="w-2 h-2 rounded-full cursor-pointer hover:bg-muted-foreground/30"
-            @click="handleReadClick($event, msg.id)"
-          />
+          <template v-else>
+            <div
+              v-if="msg.is_unread"
+              class="w-2 h-2 rounded-full bg-primary"
+              title="읽지 않음"
+              @click="handleReadClick($event, msg.id)"
+            />
+            <div
+              v-else
+              class="w-2 h-2 rounded-full cursor-pointer hover:bg-muted-foreground/30"
+              @click="handleReadClick($event, msg.id)"
+            />
+          </template>
         </div>
 
         <!-- Star -->

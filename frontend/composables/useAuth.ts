@@ -25,10 +25,10 @@ export const useAuth = () => {
     }
   }
 
-  const nativeLogin = async (username: string, password: string): Promise<void> => {
+  const nativeLogin = async (username: string, password: string, rememberMe: boolean = false): Promise<void> => {
     await $fetch('/api/auth/login', {
       method: 'POST',
-      body: { username, password },
+      body: { username, password, remember_me: rememberMe },
     })
     await fetchUser()
   }

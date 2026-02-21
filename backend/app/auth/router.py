@@ -3,7 +3,7 @@
 import secrets
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +15,8 @@ from app.auth.deps import (
     PKCE_COOKIE,
     SESSION_COOKIE,
     SESSION_MAX_AGE,
+    SESSION_MAX_AGE_DEFAULT,
+    SESSION_MAX_AGE_REMEMBER,
     get_current_user,
     sign_value,
     unsign_value,
@@ -83,7 +85,11 @@ async def _upsert_user(userinfo: dict, db: AsyncSession) -> User:
     return user
 
 
-def _session_response(user: User, body: dict | None = None) -> JSONResponse:
+def _session_response(
+    user: User,
+    body: dict | None = None,
+    max_age: int = SESSION_MAX_AGE_DEFAULT,
+) -> JSONResponse:
     session_data = sign_value({"user_id": user.id})
     response = JSONResponse(content=body or {"status": "ok"})
     response.set_cookie(
@@ -92,7 +98,7 @@ def _session_response(user: User, body: dict | None = None) -> JSONResponse:
         httponly=True,
         secure=True,
         samesite="lax",
-        max_age=SESSION_MAX_AGE,
+        max_age=max_age,
         path="/",
     )
     return response
@@ -127,7 +133,8 @@ async def login_post(body: LoginRequest, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=e.status_code, detail=e.message)
 
     user = await _upsert_user(userinfo, db)
-    return _session_response(user)
+    max_age = SESSION_MAX_AGE_REMEMBER if body.remember_me else SESSION_MAX_AGE_DEFAULT
+    return _session_response(user, max_age=max_age)
 
 
 # ── GET /api/auth/login — redirect to Authentik (fallback) ───
@@ -238,6 +245,9 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     except AuthentikAdminError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
 
+    # Generate email verification token
+    verify_token = secrets.token_urlsafe(32)
+
     # Create portal DB record (uid = OIDC sub, pk = Admin API ID)
     user = User(
         authentik_sub=authentik_user["uid"],
@@ -246,12 +256,49 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
         display_name=body.display_name,
         email=email,
         recovery_email=body.recovery_email,
+        email_verified=False,
+        email_verify_token=verify_token,
+        email_verify_sent_at=datetime.now(timezone.utc),
         is_active=False,
     )
     db.add(user)
     await db.commit()
 
-    return {"message": "가입 신청이 완료되었습니다. 관리자 승인 후 이용 가능합니다."}
+    # Send verification email to recovery_email
+    try:
+        verify_url = f"{settings.app_url}/verify-email?token={verify_token}"
+        await _send_verify_email(body.recovery_email, body.username, verify_url)
+    except Exception:
+        pass  # Don't fail registration if email fails
+
+    return {"message": "가입 신청이 완료되었습니다. 복구 이메일로 전송된 인증 링크를 확인해주세요."}
+
+
+# ── GET /api/auth/verify-email — 이메일 인증 ────────────────
+
+
+@router.get("/verify-email")
+async def verify_email(token: str = Query(...), db: AsyncSession = Depends(get_db)):
+    """Verify recovery email via token link."""
+    result = await db.execute(
+        select(User).where(User.email_verify_token == token)
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=400, detail="유효하지 않은 인증 링크입니다.")
+
+    # Check token expiry (24 hours)
+    if user.email_verify_sent_at:
+        elapsed = (datetime.now(timezone.utc) - user.email_verify_sent_at).total_seconds()
+        if elapsed > 86400:
+            raise HTTPException(status_code=400, detail="인증 링크가 만료되었습니다. 다시 가입해주세요.")
+
+    user.email_verified = True
+    user.email_verify_token = None
+    await db.commit()
+
+    return {"message": "이메일 인증이 완료되었습니다. 관리자 승인 후 로그인이 가능합니다."}
 
 
 # ── PATCH /api/auth/profile — 프로필 수정 ────────────────────
@@ -348,6 +395,33 @@ async def forgot_password(
     return {"message": success_msg}
 
 
+async def _send_verify_email(
+    to_email: str, username: str, verify_url: str
+) -> None:
+    """Send email verification link via Stalwart SMTP."""
+    import smtplib
+    from email.mime.text import MIMEText
+
+    msg = MIMEText(
+        f"{username}님, 아래 링크를 클릭하여 이메일을 인증해주세요:\n\n"
+        f"{verify_url}\n\n"
+        f"이 링크는 24시간 후 만료됩니다.\n"
+        f"본인이 요청하지 않은 경우 이 메일을 무시하세요.",
+        "plain",
+        "utf-8",
+    )
+    msg["Subject"] = "[namgun.or.kr] 이메일 인증"
+    msg["From"] = settings.smtp_from
+    msg["To"] = to_email
+
+    with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as smtp:
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.ehlo()
+        smtp.login(settings.smtp_user, settings.smtp_password)
+        smtp.send_message(msg)
+
+
 async def _send_recovery_email(
     to_email: str, username: str, recovery_link: str
 ) -> None:
@@ -364,8 +438,12 @@ async def _send_recovery_email(
         "utf-8",
     )
     msg["Subject"] = "[namgun.or.kr] 비밀번호 재설정"
-    msg["From"] = f"noreply@namgun.or.kr"
+    msg["From"] = settings.smtp_from
     msg["To"] = to_email
 
-    with smtplib.SMTP(settings.stalwart_url.replace("http://", "").split(":")[0], 25) as smtp:
+    with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as smtp:
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.ehlo()
+        smtp.login(settings.smtp_user, settings.smtp_password)
         smtp.send_message(msg)

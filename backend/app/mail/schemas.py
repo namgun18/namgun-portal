@@ -78,6 +78,13 @@ class MessageUpdateRequest(BaseModel):
     mailbox_ids: list[str] | None = None  # move to mailbox
 
 
+class SendAttachment(BaseModel):
+    blobId: str
+    type: str = "application/octet-stream"
+    name: str = "attachment"
+    size: int = 0
+
+
 class SendMessageRequest(BaseModel):
     to: list[EmailAddress]
     cc: list[EmailAddress] = []
@@ -87,3 +94,32 @@ class SendMessageRequest(BaseModel):
     html_body: str | None = None
     in_reply_to: str | None = None  # message id for threading
     references: list[str] = []
+    attachments: list[SendAttachment] = []
+
+
+class BulkActionRequest(BaseModel):
+    message_ids: list[str]
+    action: str  # "read", "unread", "star", "unstar", "delete", "move"
+    mailbox_id: str | None = None  # target mailbox for "move"
+
+
+class SignatureCreate(BaseModel):
+    name: str
+    html_content: str
+    is_default: bool = False
+
+
+class SignatureUpdate(BaseModel):
+    name: str | None = None
+    html_content: str | None = None
+    is_default: bool | None = None
+
+
+class SignatureResponse(BaseModel):
+    id: str
+    name: str
+    html_content: str
+    is_default: bool
+    created_at: str
+
+    model_config = {"from_attributes": True}

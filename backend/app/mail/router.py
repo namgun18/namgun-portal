@@ -1,10 +1,13 @@
 """Mail API endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import Response
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import get_current_user
-from app.db.models import User
+from app.db.models import MailSignature, User
+from app.db.session import get_db
 from app.mail import jmap
 from app.mail.schemas import (
     Mailbox,
@@ -14,6 +17,10 @@ from app.mail.schemas import (
     MessageSummary,
     MessageUpdateRequest,
     SendMessageRequest,
+    BulkActionRequest,
+    SignatureCreate,
+    SignatureUpdate,
+    SignatureResponse,
     EmailAddress,
     Attachment,
 )
@@ -98,10 +105,11 @@ async def list_messages(
     mailbox_id: str = Query(...),
     page: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
+    q: str | None = Query(None),
     user: User = Depends(get_current_user),
 ):
     account_id = await _get_account_id(user)
-    raw_messages, total = await jmap.get_messages(account_id, mailbox_id, page, limit)
+    raw_messages, total = await jmap.get_messages(account_id, mailbox_id, page, limit, query=q)
 
     messages = []
     for msg in raw_messages:
@@ -310,6 +318,11 @@ async def send_message(
 
     from_addr = {"name": user.display_name or user.username, "email": user.email}
 
+    # Convert attachments if provided
+    att_list = None
+    if body.attachments:
+        att_list = [a.model_dump() for a in body.attachments]
+
     result = await jmap.send_message(
         account_id=account_id,
         from_addr=from_addr,
@@ -322,12 +335,97 @@ async def send_message(
         in_reply_to=body.in_reply_to,
         references=body.references or None,
         mailbox_ids=mailbox_ids or None,
+        attachments=att_list,
     )
 
     if not result:
         raise HTTPException(status_code=500, detail="Failed to send message")
 
     return {"ok": True, "id": result.get("id")}
+
+
+# ─── Bulk operations ───
+
+
+@router.post("/bulk")
+async def bulk_action(
+    body: BulkActionRequest,
+    user: User = Depends(get_current_user),
+):
+    account_id = await _get_account_id(user)
+
+    if not body.message_ids:
+        raise HTTPException(status_code=400, detail="메시지를 선택해주세요")
+
+    if body.action == "read":
+        ok = await jmap.bulk_update_messages(
+            account_id, body.message_ids, {"keywords/$seen": True}
+        )
+    elif body.action == "unread":
+        ok = await jmap.bulk_update_messages(
+            account_id, body.message_ids, {"keywords/$seen": None}
+        )
+    elif body.action == "star":
+        ok = await jmap.bulk_update_messages(
+            account_id, body.message_ids, {"keywords/$flagged": True}
+        )
+    elif body.action == "unstar":
+        ok = await jmap.bulk_update_messages(
+            account_id, body.message_ids, {"keywords/$flagged": None}
+        )
+    elif body.action == "delete":
+        # Move to trash (or permanent delete if already in trash)
+        mailboxes = await jmap.get_mailboxes(account_id)
+        trash_id = None
+        for mb in mailboxes:
+            if mb.get("role") == "trash":
+                trash_id = mb["id"]
+                break
+        if trash_id:
+            ok = await jmap.bulk_update_messages(
+                account_id, body.message_ids, {"mailboxIds": {trash_id: True}}
+            )
+        else:
+            ok = await jmap.bulk_destroy_messages(account_id, body.message_ids)
+    elif body.action == "move":
+        if not body.mailbox_id:
+            raise HTTPException(status_code=400, detail="이동할 메일함을 지정해주세요")
+        ok = await jmap.bulk_update_messages(
+            account_id, body.message_ids, {"mailboxIds": {body.mailbox_id: True}}
+        )
+    else:
+        raise HTTPException(status_code=400, detail=f"지원하지 않는 작업: {body.action}")
+
+    if not ok:
+        raise HTTPException(status_code=500, detail="일괄 작업 처리에 실패했습니다")
+
+    return {"ok": True, "count": len(body.message_ids)}
+
+
+# ─── Upload attachment blob ───
+
+
+@router.post("/upload")
+async def upload_attachment(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+):
+    account_id = await _get_account_id(user)
+    content = await file.read()
+
+    # 25MB limit
+    if len(content) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="파일 크기는 25MB를 초과할 수 없습니다")
+
+    content_type = file.content_type or "application/octet-stream"
+    blob_id = await jmap.upload_blob(account_id, content, content_type)
+
+    return {
+        "blobId": blob_id,
+        "type": content_type,
+        "name": file.filename or "attachment",
+        "size": len(content),
+    }
 
 
 # ─── Blob download (attachment proxy) ───
@@ -351,3 +449,139 @@ async def download_blob(
         media_type=content_type,
         headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )
+
+
+# ─── Signatures CRUD ───
+
+
+@router.get("/signatures", response_model=list[SignatureResponse])
+async def list_signatures(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(MailSignature)
+        .where(MailSignature.user_id == user.id)
+        .order_by(MailSignature.created_at)
+    )
+    sigs = result.scalars().all()
+    return [
+        SignatureResponse(
+            id=s.id,
+            name=s.name,
+            html_content=s.html_content,
+            is_default=s.is_default,
+            created_at=s.created_at.isoformat(),
+        )
+        for s in sigs
+    ]
+
+
+@router.get("/signatures/default", response_model=SignatureResponse | None)
+async def get_default_signature(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(MailSignature).where(
+            MailSignature.user_id == user.id, MailSignature.is_default == True
+        )
+    )
+    sig = result.scalar_one_or_none()
+    if not sig:
+        return None
+    return SignatureResponse(
+        id=sig.id,
+        name=sig.name,
+        html_content=sig.html_content,
+        is_default=sig.is_default,
+        created_at=sig.created_at.isoformat(),
+    )
+
+
+@router.post("/signatures", response_model=SignatureResponse, status_code=201)
+async def create_signature(
+    body: SignatureCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # If setting as default, unset other defaults
+    if body.is_default:
+        result = await db.execute(
+            select(MailSignature).where(
+                MailSignature.user_id == user.id, MailSignature.is_default == True
+            )
+        )
+        for s in result.scalars():
+            s.is_default = False
+
+    sig = MailSignature(
+        user_id=user.id,
+        name=body.name,
+        html_content=body.html_content,
+        is_default=body.is_default,
+    )
+    db.add(sig)
+    await db.commit()
+    await db.refresh(sig)
+    return SignatureResponse(
+        id=sig.id,
+        name=sig.name,
+        html_content=sig.html_content,
+        is_default=sig.is_default,
+        created_at=sig.created_at.isoformat(),
+    )
+
+
+@router.patch("/signatures/{sig_id}", response_model=SignatureResponse)
+async def update_signature(
+    sig_id: str,
+    body: SignatureUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    sig = await db.get(MailSignature, sig_id)
+    if not sig or sig.user_id != user.id:
+        raise HTTPException(status_code=404, detail="서명을 찾을 수 없습니다")
+
+    if body.name is not None:
+        sig.name = body.name
+    if body.html_content is not None:
+        sig.html_content = body.html_content
+    if body.is_default is not None:
+        if body.is_default:
+            # Unset other defaults
+            result = await db.execute(
+                select(MailSignature).where(
+                    MailSignature.user_id == user.id,
+                    MailSignature.is_default == True,
+                    MailSignature.id != sig_id,
+                )
+            )
+            for s in result.scalars():
+                s.is_default = False
+        sig.is_default = body.is_default
+
+    await db.commit()
+    await db.refresh(sig)
+    return SignatureResponse(
+        id=sig.id,
+        name=sig.name,
+        html_content=sig.html_content,
+        is_default=sig.is_default,
+        created_at=sig.created_at.isoformat(),
+    )
+
+
+@router.delete("/signatures/{sig_id}")
+async def delete_signature(
+    sig_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    sig = await db.get(MailSignature, sig_id)
+    if not sig or sig.user_id != user.id:
+        raise HTTPException(status_code=404, detail="서명을 찾을 수 없습니다")
+    await db.delete(sig)
+    await db.commit()
+    return {"ok": True}

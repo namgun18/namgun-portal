@@ -39,7 +39,7 @@ services:
         condition: service_healthy
     volumes:
       - portal-storage:/storage
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     expose:
       - "8000"
     healthcheck:
@@ -51,6 +51,7 @@ services:
     restart: unless-stopped
     networks:
       - portal-internal
+      - lab-net
 
   # ─── Nuxt 3 SSR 프론트엔드 ───
   frontend:
@@ -115,3 +116,5 @@ volumes:
 networks:
   portal-internal:
     name: portal-internal
+  lab-net:
+    name: lab-net

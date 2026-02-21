@@ -173,15 +173,28 @@ async def get_messages(
     mailbox_id: str,
     page: int = 0,
     limit: int = 50,
+    query: str | None = None,
 ) -> tuple[list[dict], int]:
     """Query + fetch messages for a mailbox. Returns (messages, total)."""
     position = page * limit
+
+    if query:
+        jmap_filter = {
+            "operator": "AND",
+            "conditions": [
+                {"inMailbox": mailbox_id},
+                {"text": query},
+            ],
+        }
+    else:
+        jmap_filter = {"inMailbox": mailbox_id}
+
     result = await jmap_call([
         [
             "Email/query",
             {
                 "accountId": account_id,
-                "filter": {"inMailbox": mailbox_id},
+                "filter": jmap_filter,
                 "sort": [{"property": "receivedAt", "isAscending": False}],
                 "position": position,
                 "limit": limit,
@@ -307,29 +320,59 @@ async def send_message(
     in_reply_to: str | None = None,
     references: list[str] | None = None,
     mailbox_ids: dict | None = None,
+    attachments: list[dict] | None = None,
 ) -> dict | None:
     """Create and send an email in one JMAP call."""
-    email_body = [{"partId": "text", "type": "text/plain"}]
     body_values = {"text": {"value": text_body}}
-
     if html_body:
-        email_body = [
-            {"partId": "text", "type": "text/plain"},
-            {"partId": "html", "type": "text/html"},
-        ]
         body_values["html"] = {"value": html_body}
 
-    email_create = {
-        "from": [from_addr],
-        "to": to,
-        "subject": subject,
-        "bodyValues": body_values,
-        "textBody": [{"partId": "text", "type": "text/plain"}],
-        "keywords": {"$seen": True},
-    }
+    # Build body structure
+    if attachments:
+        # multipart/mixed with body + attachments
+        body_parts: list[dict] = []
+        if html_body:
+            body_parts.append({
+                "type": "multipart/alternative",
+                "subParts": [
+                    {"partId": "text", "type": "text/plain"},
+                    {"partId": "html", "type": "text/html"},
+                ],
+            })
+        else:
+            body_parts.append({"partId": "text", "type": "text/plain"})
 
-    if html_body:
-        email_create["htmlBody"] = [{"partId": "html", "type": "text/html"}]
+        for att in attachments:
+            body_parts.append({
+                "blobId": att["blobId"],
+                "type": att.get("type", "application/octet-stream"),
+                "name": att.get("name"),
+                "disposition": "attachment",
+                "size": att.get("size", 0),
+            })
+
+        email_create = {
+            "from": [from_addr],
+            "to": to,
+            "subject": subject,
+            "bodyValues": body_values,
+            "bodyStructure": {
+                "type": "multipart/mixed",
+                "subParts": body_parts,
+            },
+            "keywords": {"$seen": True},
+        }
+    else:
+        email_create = {
+            "from": [from_addr],
+            "to": to,
+            "subject": subject,
+            "bodyValues": body_values,
+            "textBody": [{"partId": "text", "type": "text/plain"}],
+            "keywords": {"$seen": True},
+        }
+        if html_body:
+            email_create["htmlBody"] = [{"partId": "html", "type": "text/html"}]
 
     if cc:
         email_create["cc"] = cc
@@ -377,6 +420,57 @@ async def send_message(
             if "draft" in created:
                 return created["draft"]
     return None
+
+
+# ─── Bulk operations ───
+
+
+async def bulk_update_messages(
+    account_id: str, message_ids: list[str], updates: dict
+) -> bool:
+    """Update multiple messages in one JMAP call."""
+    update_map = {mid: updates for mid in message_ids}
+    result = await jmap_call([
+        [
+            "Email/set",
+            {"accountId": account_id, "update": update_map},
+            "b0",
+        ],
+    ])
+    for resp in result.get("methodResponses", []):
+        if resp[0] == "Email/set":
+            return resp[1].get("updated") is not None
+    return False
+
+
+async def bulk_destroy_messages(account_id: str, message_ids: list[str]) -> bool:
+    """Delete multiple messages in one JMAP call."""
+    result = await jmap_call([
+        [
+            "Email/set",
+            {"accountId": account_id, "destroy": message_ids},
+            "d0",
+        ],
+    ])
+    for resp in result.get("methodResponses", []):
+        if resp[0] == "Email/set":
+            return len(resp[1].get("destroyed", [])) > 0
+    return False
+
+
+# ─── Blob upload ───
+
+
+async def upload_blob(account_id: str, content: bytes, content_type: str) -> str:
+    """Upload a blob (attachment) to Stalwart. Returns blobId."""
+    client = _get_client()
+    resp = await client.post(
+        f"/jmap/upload/{account_id}/",
+        content=content,
+        headers={"Content-Type": content_type},
+    )
+    resp.raise_for_status()
+    return resp.json()["blobId"]
 
 
 # ─── Blob download ───

@@ -15,6 +15,7 @@
 | v1.2 | 2026-02-21 | 남기완 | Added Phase 6.5 (Auth Gateway) and Phase 7 (Registration & Admin Panel) |
 | v1.3 | 2026-02-21 | 남기완 | Added Phase 8 (BBB New Tab Meetings), Phase 9 (Gitea Portal Integration), Phase 10 (Dashboard Renewal) |
 | v1.4 | 2026-02-22 | 남기완 | Added Phase 11 (Visual Refresh), Phase 12 (Infrastructure Security Hardening) |
+| v1.5 | 2026-02-22 | 남기완 | Added Phase 13 (LocalStack Lab — AWS IaC Learning Environment) |
 
 ---
 
@@ -27,7 +28,7 @@ The namgun.or.kr Integrated Portal is a self-hosted, unified platform designed f
 - Unified SSO authentication across all services (OIDC / LDAP)
 - Infrastructure aligned with ISMS-P security standards
 - Data sovereignty through self-hosting
-- Phased service rollout (Phase 0 through Phase 12)
+- Phased service rollout (Phase 0 through Phase 13)
 
 ---
 
@@ -49,6 +50,7 @@ The namgun.or.kr Integrated Portal is a self-hosted, unified platform designed f
 | Phase 10 | Dashboard Home Renewal | **Complete** | — | 8 widgets, game server status, storage gauge, Git cache (v0.5.1) |
 | Phase 11 | Visual Refresh | **Complete** | — | Color palette separation, card/button interactions, gradient hero/header, widget color icons (v0.5.2) |
 | Phase 12 | Infrastructure Security Hardening | **Complete** | — | Full-server vulnerability scan, CSP headers, firewalld activation, OS security patches, test page cleanup |
+| Phase 13 | LocalStack Lab — AWS IaC Learning Environment | **Complete** | — | Terraform IaC, per-user LocalStack containers, topology visualization, templates, CI/CD |
 
 ---
 
@@ -77,7 +79,8 @@ Internet
   │       │    └─ portal-nginx (internal reverse proxy, :8080)   │
   │       ├─ Gitea 1.25.4                                        │
   │       ├─ RustDesk Pro (hbbs + hbbr)                          │
-  │       └─ Game Panel (backend + nginx + palworld)             │
+  │       ├─ Game Panel (backend + nginx + palworld)             │
+│       └─ LocalStack Lab (per-user dynamic containers, lab-net)│
   │                                                              │
   │  [192.168.0.100] OMV (OpenMediaVault) — NAS                 │
   │    └─ NFSv4 server (/export/root, fsid=0)                   │
@@ -1052,7 +1055,141 @@ Cleaned up all resources related to `test.namgun.or.kr:47264` that were created 
 
 ---
 
-## 18. Key Troubleshooting Summary
+## 18. Phase 13: LocalStack Lab — AWS IaC Learning Environment (Complete)
+
+Integrated a LocalStack-based AWS learning environment with Terraform IaC into the portal. Each user gets an isolated LocalStack Docker container, manages AWS resources declaratively through Terraform, and visualizes the resource topology.
+
+### 18.1 Core Design Principles
+
+| Principle | Description |
+|-----------|-------------|
+| IaC First | Terraform HCL code is the primary resource management method; click-based UI is supplementary |
+| User Isolation | Dedicated LocalStack Docker container per user (2GB RAM, 2 CPU limit) |
+| Tenant Sharing | Environments can be shared with other users via member invitations |
+| Backend Relay | All AWS/Terraform commands route through the backend; no direct frontend access |
+
+### 18.2 Supported AWS Services (6 Beginner-Friendly)
+
+| Service | Purpose | Key Features |
+|---------|---------|--------------|
+| S3 | Object Storage | Bucket CRUD, file upload/delete |
+| SQS | Message Queue | Queue CRUD, send/receive messages |
+| Lambda | Serverless Functions | Python function creation/invocation |
+| DynamoDB | NoSQL DB | Table CRUD, item scan |
+| SNS | Notifications | Topic creation, SQS subscription, message publishing |
+| IAM | Access Management | User/role/policy listing (read-only) |
+
+### 18.3 Terraform IaC Integration
+
+| Item | Detail |
+|------|--------|
+| Terraform version | 1.9.8 (bundled in backend Docker image) |
+| Workflow | Init → Plan → Apply → Destroy |
+| provider.tf | Auto-generated per environment (LocalStack endpoint injection, read-only) |
+| User files | `main.tf` provided by default, additional `.tf` files freely created/deleted |
+| Plugin cache | Shared `TF_PLUGIN_CACHE_DIR=/tmp/tf-plugin-cache` |
+| Execution limits | 180s timeout, `-no-color`, `TF_IN_AUTOMATION=1` |
+
+### 18.4 Pre-defined Templates (5)
+
+| Template | Content |
+|----------|---------|
+| S3 Static Website | S3 bucket + website hosting config + index.html upload |
+| Lambda Function | Python Lambda function + IAM role + CloudWatch log group |
+| SQS + SNS | SNS topic + SQS queue + subscription linkage |
+| DynamoDB Table | DynamoDB table + GSI (Global Secondary Index) |
+| Full Stack (S3 + Lambda + DynamoDB) | S3 + Lambda + DynamoDB + IAM role serverless pattern |
+
+### 18.5 Topology Visualization
+
+Uses cytoscape.js with dagre layout to render AWS resource relationships as a graph.
+
+| Item | Detail |
+|------|--------|
+| Libraries | cytoscape 3.30, cytoscape-dagre 2.5, dagre 0.8 |
+| Node colors | S3=green, Lambda=orange, SQS=purple, DynamoDB=blue, SNS=red, IAM=gray |
+| Edge discovery | Lambda event source mappings, SNS subscriptions |
+| Auto-refresh | 10-second polling interval (toggleable) |
+| Layout | dagre hierarchical (default) |
+
+### 18.6 CI/CD Deploy Endpoint
+
+Provides a deploy API for Git-based CI/CD automation.
+
+```
+POST /api/lab/environments/{id}/terraform/deploy
+Body: { "files": { "main.tf": "...", "network.tf": "..." } }
+→ Runs init → plan → apply automatically
+```
+
+### 18.7 DB Models
+
+| Model | Fields | Purpose |
+|-------|--------|---------|
+| `LabEnvironment` | id, owner_id, name, container_name, container_id, status, created_at | Environment metadata |
+| `LabMember` | id, environment_id, user_id, role, invited_at | Member management (owner/member) |
+
+### 18.8 API Endpoints (26)
+
+| Category | Endpoint | Description |
+|----------|----------|-------------|
+| Environment | `GET/POST /api/lab/environments` | List / Create |
+| | `GET/DELETE /api/lab/environments/{id}` | Detail / Delete |
+| | `POST .../start`, `POST .../stop` | Start / Stop |
+| Members | `POST/DELETE .../members` | Invite / Remove |
+| Terraform | `GET/PUT .../terraform/files` | File get / save |
+| | `POST .../terraform/{init,plan,apply,destroy}` | Run commands |
+| | `GET .../terraform/templates` | Template list |
+| | `POST .../terraform/deploy` | CI/CD deploy |
+| Topology | `GET .../topology` | Resource graph |
+| Resources | `GET/POST/DELETE .../resources/{service}` | CRUD |
+| S3/SQS/Lambda/DynamoDB/SNS | Service-specific endpoints | Detailed operations |
+
+### 18.9 Frontend Components
+
+| Component | Role |
+|-----------|------|
+| `pages/lab.vue` | Main page (sidebar + Terraform/Resources tabs) |
+| `composables/useLab.ts` | State management (environments, Terraform, topology) |
+| `components/lab/LabSidebar.vue` | Environment list, create, start/stop/delete |
+| `components/lab/LabTerraform.vue` | HCL code editor, file tabs, run buttons, output terminal |
+| `components/lab/LabTopology.vue` | cytoscape.js topology graph |
+| `components/lab/LabResourcePanel.vue` | Per-service resource CRUD (S3/SQS/Lambda/DynamoDB/SNS) |
+| `components/lab/LabMemberDialog.vue` | Member invite/management dialog |
+
+### 18.10 Docker Infrastructure Changes
+
+| Item | Change |
+|------|--------|
+| Docker socket | `:ro` → `:rw` (container creation/management required) |
+| Network | Added `lab-net` (LocalStack + backend communication) |
+| Backend image | Added Terraform 1.9.8 + Git installation |
+| Container limits | Max 5 environments per user, each 2GB RAM / 2 CPU |
+
+### 18.11 Modified/Created Files (17)
+
+| # | File | Type |
+|---|------|------|
+| 1 | `backend/Dockerfile` | Modified (Terraform + Git install) |
+| 2 | `backend/app/db/models.py` | Modified (LabEnvironment + LabMember) |
+| 3 | `backend/app/main.py` | Modified (lab_router registration) |
+| 4 | `backend/requirements.txt` | Modified (boto3 added) |
+| 5 | `docker-compose.yml` | Modified (socket rw + lab-net) |
+| 6 | `frontend/package.json` | Modified (cytoscape added) |
+| 7 | `frontend/components/layout/AppHeader.vue` | Modified (Lab navigation) |
+| 8 | `backend/app/lab/__init__.py` | New |
+| 9 | `backend/app/lab/docker_manager.py` | New (Docker lifecycle) |
+| 10 | `backend/app/lab/aws_client.py` | New (boto3 wrapper) |
+| 11 | `backend/app/lab/router.py` | New (API router) |
+| 12 | `backend/app/lab/schemas.py` | New (Pydantic schemas) |
+| 13 | `backend/app/lab/terraform_manager.py` | New (Terraform workspace) |
+| 14 | `frontend/pages/lab.vue` | New (main page) |
+| 15 | `frontend/composables/useLab.ts` | New (state management) |
+| 16 | `frontend/components/lab/*.vue` (4) | New (UI components) |
+
+---
+
+## 19. Key Troubleshooting Summary
 
 | # | Problem | Cause | Resolution |
 | 23 | Git recent-commits response delay | Sequential fetching from 50 repos | Reduced to 5 repos + asyncio.gather parallel + 120s in-memory TTL cache |
@@ -1084,9 +1221,9 @@ Cleaned up all resources related to `test.namgun.or.kr:47264` that were created 
 
 ---
 
-## 19. Remaining Tasks
+## 20. Remaining Tasks
 
-### 19.1 Immediate Action Required
+### 20.1 Immediate Action Required
 
 - [x] Confirm DKIM `dkim=pass` (after DNS cache expiry)
 - [ ] Register PTR record (SK Broadband, `211.244.144.69 → mail.namgun.or.kr`)
@@ -1095,7 +1232,7 @@ Cleaned up all resources related to `test.namgun.or.kr:47264` that were created 
 - [ ] Reboot Nginx/Mail servers for kernel update (security patches applied, new kernel pending load)
 - [ ] Transition mail server SELinux to Enforcing (verify services after reboot)
 
-### 19.2 Completed Items
+### 20.2 Completed Items
 
 | Item | Completed Phase |
 |------|----------------|
@@ -1133,8 +1270,15 @@ Cleaned up all resources related to `test.namgun.or.kr:47264` that were created 
 | OS security patches applied (Nginx + Mail) | Phase 12 |
 | Temporary test page cleanup (test.namgun.or.kr) | Phase 12 |
 | Docker unused image/cache cleanup | Phase 12 |
+| LocalStack Lab AWS learning environment | Phase 13 |
+| Terraform IaC integration (Init/Plan/Apply/Destroy) | Phase 13 |
+| Per-user isolated LocalStack containers | Phase 13 |
+| cytoscape.js topology visualization | Phase 13 |
+| Pre-defined Terraform templates (5) | Phase 13 |
+| CI/CD deploy endpoint | Phase 13 |
+| Member invite/management (multi-tenant) | Phase 13 |
 
-### 19.3 Future Plans
+### 20.3 Future Plans
 
 | Item | Description | Expected Technology Stack |
 |------|-------------|--------------------------|
@@ -1146,7 +1290,7 @@ Cleaned up all resources related to `test.namgun.or.kr:47264` that were created 
 
 ---
 
-## 20. Technology Stack Summary
+## 21. Technology Stack Summary
 
 | Category | Technology |
 |----------|------------|
@@ -1156,7 +1300,8 @@ Cleaned up all resources related to `test.namgun.or.kr:47264` that were created 
 | Portal backend | FastAPI, SQLAlchemy 2.0 (async), asyncpg |
 | Reverse proxy | Nginx (Rocky Linux 10) |
 | TLS certificates | Let's Encrypt (certbot + ACME) |
-| Containers (Docker) | Authentik, Portal (frontend + backend + nginx + PostgreSQL), Gitea, RustDesk Pro, Game Panel |
+| IaC / Learning | Terraform 1.9.8, LocalStack 3.8, boto3, cytoscape.js |
+| Containers (Docker) | Authentik, Portal (frontend + backend + nginx + PostgreSQL), Gitea, RustDesk Pro, Game Panel, LocalStack Lab |
 | Containers (Podman) | Stalwart Mail, LDAP Outpost |
 | Mail server | Stalwart Mail Server (RocksDB) |
 | Video conferencing | BigBlueButton 3.0 |
@@ -1168,9 +1313,9 @@ Cleaned up all resources related to `test.namgun.or.kr:47264` that were created 
 
 ---
 
-## 21. Security Considerations
+## 22. Security Considerations
 
-### 21.1 Applied Security Policies
+### 22.1 Applied Security Policies
 
 - ISMS-P compliant security headers applied across all sites
 - TLS 1.2+ enforced (HSTS preload)
@@ -1185,7 +1330,7 @@ Cleaned up all resources related to `test.namgun.or.kr:47264` that were created 
 - firewalld firewall activated on all servers (Phase 12)
 - Regular OS security patch application (Phase 12)
 
-### 21.2 Planned Security Enhancements
+### 22.2 Planned Security Enhancements
 
 - Complete reverse DNS verification through PTR record registration
 - Strengthen Authentik MFA (multi-factor authentication) policies
@@ -1193,4 +1338,4 @@ Cleaned up all resources related to `test.namgun.or.kr:47264` that were created 
 
 ---
 
-*End of document. Last updated: 2026-02-22*
+*End of document. Last updated: 2026-02-22 (v1.5)*

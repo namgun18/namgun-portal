@@ -52,6 +52,13 @@ export interface MessageDetail {
   attachments: Attachment[]
 }
 
+export interface UploadedAttachment {
+  blobId: string
+  type: string
+  name: string
+  size: number
+}
+
 export type ComposeMode = 'new' | 'reply' | 'replyAll' | 'forward'
 
 export interface ComposeDefaults {
@@ -78,6 +85,8 @@ const showCompose = ref(false)
 const composeMode = ref<ComposeMode>('new')
 const composeDefaults = ref<ComposeDefaults | null>(null)
 const sending = ref(false)
+const searchQuery = ref('')
+const selectedIds = ref<Set<string>>(new Set())
 
 export function useMail() {
   // ─── Computed ───
@@ -122,7 +131,9 @@ export function useMail() {
   async function selectMailbox(id: string) {
     selectedMailboxId.value = id
     selectedMessage.value = null
+    selectedIds.value = new Set()
     currentPage.value = 0
+    searchQuery.value = ''
     await fetchMessages()
   }
 
@@ -130,18 +141,20 @@ export function useMail() {
     if (!selectedMailboxId.value) return
     loadingMessages.value = true
     try {
+      const params: Record<string, any> = {
+        mailbox_id: selectedMailboxId.value,
+        page: currentPage.value,
+        limit: limit.value,
+      }
+      if (searchQuery.value.trim()) {
+        params.q = searchQuery.value.trim()
+      }
       const data = await $fetch<{
         messages: MessageSummary[]
         total: number
         page: number
         limit: number
-      }>('/api/mail/messages', {
-        params: {
-          mailbox_id: selectedMailboxId.value,
-          page: currentPage.value,
-          limit: limit.value,
-        },
-      })
+      }>('/api/mail/messages', { params })
       messages.value = data.messages
       totalMessages.value = data.total
     } catch (e: any) {
@@ -150,6 +163,12 @@ export function useMail() {
     } finally {
       loadingMessages.value = false
     }
+  }
+
+  function setSearchQuery(q: string) {
+    searchQuery.value = q
+    currentPage.value = 0
+    fetchMessages()
   }
 
   async function openMessage(id: string) {
@@ -236,14 +255,25 @@ export function useMail() {
     }
   }
 
+  async function uploadAttachment(file: File): Promise<UploadedAttachment> {
+    const formData = new FormData()
+    formData.append('file', file)
+    return await $fetch<UploadedAttachment>('/api/mail/upload', {
+      method: 'POST',
+      body: formData,
+    })
+  }
+
   async function sendMessage(data: {
     to: EmailAddress[]
     cc: EmailAddress[]
     bcc: EmailAddress[]
     subject: string
     text_body: string
+    html_body?: string | null
     in_reply_to?: string | null
     references?: string[]
+    attachments?: UploadedAttachment[]
   }) {
     sending.value = true
     try {
@@ -261,6 +291,36 @@ export function useMail() {
       throw e
     } finally {
       sending.value = false
+    }
+  }
+
+  function toggleSelect(id: string) {
+    const s = new Set(selectedIds.value)
+    if (s.has(id)) s.delete(id)
+    else s.add(id)
+    selectedIds.value = s
+  }
+
+  function selectAll() {
+    selectedIds.value = new Set(messages.value.map(m => m.id))
+  }
+
+  function deselectAll() {
+    selectedIds.value = new Set()
+  }
+
+  async function bulkAction(action: string, mailboxId?: string) {
+    const ids = Array.from(selectedIds.value)
+    if (ids.length === 0) return
+    try {
+      await $fetch('/api/mail/bulk', {
+        method: 'POST',
+        body: { message_ids: ids, action, mailbox_id: mailboxId || null },
+      })
+      selectedIds.value = new Set()
+      await Promise.all([fetchMessages(), fetchMailboxes()])
+    } catch (e: any) {
+      console.error('bulkAction error:', e)
     }
   }
 
@@ -359,6 +419,8 @@ export function useMail() {
     composeMode: readonly(composeMode),
     composeDefaults: readonly(composeDefaults),
     sending: readonly(sending),
+    searchQuery,
+    selectedIds,
     // Computed
     totalPages,
     hasNextPage,
@@ -375,10 +437,16 @@ export function useMail() {
     deleteMessage,
     moveMessage,
     sendMessage,
+    uploadAttachment,
+    toggleSelect,
+    selectAll,
+    deselectAll,
+    bulkAction,
     openCompose,
     clearSelectedMessage,
     nextPage,
     prevPage,
+    setSearchQuery,
     downloadAttachment,
     refresh,
   }

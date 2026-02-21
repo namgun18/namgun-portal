@@ -15,6 +15,7 @@
 | v1.2 | 2026-02-21 | 남기완 | Phase 6.5(인증 게이트웨이 전환), Phase 7(회원가입·관리자 패널) 추가 |
 | v1.3 | 2026-02-21 | 남기완 | Phase 8(BBB 새 탭 회의), Phase 9(Gitea 포털 내재화), Phase 10(대시보드 리뉴얼) 추가 |
 | v1.4 | 2026-02-22 | 남기완 | Phase 11(비주얼 리프레시), Phase 12(인프라 보안 강화) 추가 |
+| v1.5 | 2026-02-22 | 남기완 | Phase 13(LocalStack Lab — AWS IaC 학습 환경) 추가 |
 
 ---
 
@@ -27,7 +28,7 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 - 모든 서비스에 대한 SSO 인증 통합 (OIDC / LDAP)
 - ISMS-P 보안 기준에 준하는 인프라 구성
 - 셀프 호스팅 기반의 데이터 주권 확보
-- 단계적 서비스 확장 (Phase 0 ~ Phase 12)
+- 단계적 서비스 확장 (Phase 0 ~ Phase 13)
 
 ---
 
@@ -49,6 +50,7 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 | Phase 10 | 대시보드 홈화면 리뉴얼 | **완료** | — | 8개 위젯, 게임서버 상태, 스토리지 게이지, Git 캐시 (v0.5.1) |
 | Phase 11 | 비주얼 리프레시 | **완료** | — | 색상 팔레트 분리, 카드/버튼 인터랙션, 그라디언트 히어로·헤더, 위젯 색상 아이콘 (v0.5.2) |
 | Phase 12 | 인프라 보안 강화 | **완료** | — | 전서버 취약점 스캔, CSP 헤더, firewalld 활성화, OS 보안 패치, test 페이지 정리 |
+| Phase 13 | LocalStack Lab — AWS IaC 학습 환경 | **완료** | — | Terraform IaC, 사용자별 LocalStack 컨테이너, 토폴로지 시각화, 템플릿, CI/CD |
 
 ---
 
@@ -77,7 +79,8 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
   │       │    └─ portal-nginx (내부 리버스 프록시, :8080)           │
   │       ├─ Gitea 1.25.4                                          │
   │       ├─ RustDesk Pro (hbbs + hbbr)                            │
-  │       └─ Game Panel (backend + nginx + palworld)               │
+  │       ├─ Game Panel (backend + nginx + palworld)               │
+│       └─ LocalStack Lab (사용자별 동적 컨테이너, lab-net)       │
   │                                                                │
   │  [192.168.0.100] OMV (OpenMediaVault) — NAS                   │
   │    └─ NFSv4 서버 (/export/root, fsid=0)                        │
@@ -1118,7 +1121,141 @@ Phase 0에서 방화벽 테스트용으로 생성했던 `test.namgun.or.kr:47264
 
 ---
 
-## 18. 핵심 트러블슈팅 정리
+## 18. Phase 13: LocalStack Lab — AWS IaC 학습 환경 (완료)
+
+AWS 서비스를 로컬에서 에뮬레이션하는 LocalStack과 Terraform IaC를 결합한 학습 환경을 포털에 통합하였다. 사용자별 격리된 LocalStack 컨테이너를 제공하며, Terraform을 통해 AWS 리소스를 선언적으로 관리하고 토폴로지를 시각화한다.
+
+### 18.1 핵심 설계 원칙
+
+| 원칙 | 설명 |
+|------|------|
+| IaC First | Terraform HCL 코드를 통한 리소스 관리가 핵심. 클릭 기반 UI는 보조 |
+| 사용자 격리 | 사용자별 전용 LocalStack Docker 컨테이너 (2GB RAM, 2 CPU 제한) |
+| 테넌트 공유 | 환경을 다른 사용자에게 초대 가능 (멤버 관리) |
+| 백엔드 중계 | 모든 AWS/Terraform 명령은 백엔드를 경유, 프론트엔드 직접 접근 불가 |
+
+### 18.2 지원 AWS 서비스 (초보 친화 6종)
+
+| 서비스 | 용도 | 주요 기능 |
+|--------|------|-----------|
+| S3 | 오브젝트 스토리지 | 버킷 CRUD, 파일 업로드/삭제 |
+| SQS | 메시지 큐 | 큐 CRUD, 메시지 발송/수신 |
+| Lambda | 서버리스 함수 | Python 함수 생성/실행 |
+| DynamoDB | NoSQL DB | 테이블 CRUD, 아이템 스캔 |
+| SNS | 알림 | 토픽 생성, SQS 구독, 메시지 발행 |
+| IAM | 권한 관리 | 유저/역할/정책 조회 (읽기 전용) |
+
+### 18.3 Terraform IaC 통합
+
+| 항목 | 내용 |
+|------|------|
+| Terraform 버전 | 1.9.8 (백엔드 Docker 이미지에 포함) |
+| 워크플로 | Init → Plan → Apply → Destroy |
+| provider.tf | 환경별 자동 생성 (LocalStack 엔드포인트 주입, 읽기 전용) |
+| 사용자 파일 | `main.tf` 기본 제공, 추가 `.tf` 파일 자유 생성/삭제 |
+| 플러그인 캐시 | `TF_PLUGIN_CACHE_DIR=/tmp/tf-plugin-cache` 공유 |
+| 실행 제한 | 180초 타임아웃, `-no-color`, `TF_IN_AUTOMATION=1` |
+
+### 18.4 사전 정의 템플릿 (5종)
+
+| 템플릿 | 내용 |
+|--------|------|
+| S3 정적 웹사이트 | S3 버킷 + 웹사이트 호스팅 설정 + index.html 업로드 |
+| Lambda 함수 | Python Lambda 함수 + IAM 역할 + CloudWatch 로그 그룹 |
+| SQS + SNS | SNS 토픽 + SQS 큐 + 구독 연결 |
+| DynamoDB 테이블 | DynamoDB 테이블 + GSI (Global Secondary Index) |
+| 풀스택 (S3 + Lambda + DynamoDB) | S3 + Lambda + DynamoDB + IAM 역할을 결합한 서버리스 패턴 |
+
+### 18.5 토폴로지 시각화
+
+cytoscape.js + dagre 레이아웃을 사용하여 AWS 리소스 관계를 그래프로 표시한다.
+
+| 항목 | 내용 |
+|------|------|
+| 라이브러리 | cytoscape 3.30, cytoscape-dagre 2.5, dagre 0.8 |
+| 노드 색상 | S3=초록, Lambda=주황, SQS=보라, DynamoDB=파랑, SNS=빨강, IAM=회색 |
+| 엣지 발견 | Lambda event source mappings, SNS subscriptions |
+| 자동 새로고침 | 10초 간격 폴링 (토글 가능) |
+| 레이아웃 | dagre 계층형 (기본) |
+
+### 18.6 CI/CD 배포 엔드포인트
+
+Git 기반 CI/CD를 위한 배포 API를 제공한다.
+
+```
+POST /api/lab/environments/{id}/terraform/deploy
+Body: { "files": { "main.tf": "...", "network.tf": "..." } }
+→ init → plan → apply 자동 실행
+```
+
+### 18.7 DB 모델
+
+| 모델 | 필드 | 역할 |
+|------|------|------|
+| `LabEnvironment` | id, owner_id, name, container_name, container_id, status, created_at | 환경 메타데이터 |
+| `LabMember` | id, environment_id, user_id, role, invited_at | 멤버 관리 (owner/member) |
+
+### 18.8 API 엔드포인트 (26개)
+
+| 분류 | 엔드포인트 | 설명 |
+|------|-----------|------|
+| 환경 관리 | `GET/POST /api/lab/environments` | 목록 조회 / 생성 |
+| | `GET/DELETE /api/lab/environments/{id}` | 상세 / 삭제 |
+| | `POST .../start`, `POST .../stop` | 시작 / 중지 |
+| 멤버 | `POST/DELETE .../members` | 초대 / 제거 |
+| Terraform | `GET/PUT .../terraform/files` | 파일 조회 / 저장 |
+| | `POST .../terraform/{init,plan,apply,destroy}` | 명령 실행 |
+| | `GET .../terraform/templates` | 템플릿 목록 |
+| | `POST .../terraform/deploy` | CI/CD 배포 |
+| 토폴로지 | `GET .../topology` | 리소스 그래프 |
+| 리소스 | `GET/POST/DELETE .../resources/{service}` | CRUD |
+| S3/SQS/Lambda/DynamoDB/SNS | 서비스별 전용 엔드포인트 | 상세 작업 |
+
+### 18.9 프론트엔드 구성
+
+| 컴포넌트 | 역할 |
+|---------|------|
+| `pages/lab.vue` | 메인 페이지 (사이드바 + Terraform/리소스 탭) |
+| `composables/useLab.ts` | 상태 관리 (환경, Terraform, 토폴로지) |
+| `components/lab/LabSidebar.vue` | 환경 목록, 생성, 시작/중지/삭제 |
+| `components/lab/LabTerraform.vue` | HCL 코드 에디터, 파일 탭, 실행 버튼, 출력 터미널 |
+| `components/lab/LabTopology.vue` | cytoscape.js 토폴로지 그래프 |
+| `components/lab/LabResourcePanel.vue` | 서비스별 리소스 CRUD (S3/SQS/Lambda/DynamoDB/SNS) |
+| `components/lab/LabMemberDialog.vue` | 멤버 초대/관리 다이얼로그 |
+
+### 18.10 Docker 인프라 변경
+
+| 항목 | 변경 |
+|------|------|
+| Docker socket | `:ro` → `:rw` (컨테이너 생성/관리 필요) |
+| 네트워크 | `lab-net` 추가 (LocalStack + backend 통신용) |
+| backend 이미지 | Terraform 1.9.8 + Git 설치 추가 |
+| 컨테이너 제한 | 사용자당 최대 5개 환경, 각 2GB RAM / 2 CPU |
+
+### 18.11 수정/생성 파일 (17개)
+
+| # | 파일 | 구분 |
+|---|------|------|
+| 1 | `backend/Dockerfile` | 수정 (Terraform + Git 설치) |
+| 2 | `backend/app/db/models.py` | 수정 (LabEnvironment + LabMember) |
+| 3 | `backend/app/main.py` | 수정 (lab_router 등록) |
+| 4 | `backend/requirements.txt` | 수정 (boto3 추가) |
+| 5 | `docker-compose.yml` | 수정 (socket rw + lab-net) |
+| 6 | `frontend/package.json` | 수정 (cytoscape 추가) |
+| 7 | `frontend/components/layout/AppHeader.vue` | 수정 (Lab 네비게이션) |
+| 8 | `backend/app/lab/__init__.py` | 신규 |
+| 9 | `backend/app/lab/docker_manager.py` | 신규 (Docker 라이프사이클) |
+| 10 | `backend/app/lab/aws_client.py` | 신규 (boto3 래퍼) |
+| 11 | `backend/app/lab/router.py` | 신규 (API 라우터) |
+| 12 | `backend/app/lab/schemas.py` | 신규 (Pydantic 스키마) |
+| 13 | `backend/app/lab/terraform_manager.py` | 신규 (Terraform 워크스페이스) |
+| 14 | `frontend/pages/lab.vue` | 신규 (메인 페이지) |
+| 15 | `frontend/composables/useLab.ts` | 신규 (상태 관리) |
+| 16 | `frontend/components/lab/*.vue` (4개) | 신규 (UI 컴포넌트) |
+
+---
+
+## 19. 핵심 트러블슈팅 정리
 
 | # | 문제 | 원인 | 해결 방법 |
 | 23 | Git recent-commits 응답 지연 | 50개 저장소를 순차 조회 | 5개로 축소 + asyncio.gather 병렬 + 120초 인메모리 TTL 캐시 |
@@ -1150,9 +1287,9 @@ Phase 0에서 방화벽 테스트용으로 생성했던 `test.namgun.or.kr:47264
 
 ---
 
-## 19. 잔여 작업 항목
+## 20. 잔여 작업 항목
 
-### 19.1 즉시 조치 필요
+### 20.1 즉시 조치 필요
 
 - [x] DKIM `dkim=pass` 확인 (DNS 캐시 만료 후)
 - [ ] PTR 레코드 등록 (SK 브로드밴드, `211.244.144.69 → mail.namgun.or.kr`)
@@ -1161,7 +1298,7 @@ Phase 0에서 방화벽 테스트용으로 생성했던 `test.namgun.or.kr:47264
 - [ ] Nginx/Mail 서버 커널 재부팅 (보안 패치 적용 완료, 신규 커널 로드 필요)
 - [ ] 메일서버 SELinux Enforcing 전환 (재부팅 후 서비스 정상 확인 필요)
 
-### 19.2 완료된 항목
+### 20.2 완료된 항목
 
 | 항목 | 완료 단계 |
 |------|----------|
@@ -1199,8 +1336,15 @@ Phase 0에서 방화벽 테스트용으로 생성했던 `test.namgun.or.kr:47264
 | OS 보안 패치 적용 (Nginx + Mail) | Phase 12 |
 | 임시 테스트 페이지 정리 (test.namgun.or.kr) | Phase 12 |
 | Docker 미사용 이미지/캐시 정리 | Phase 12 |
+| LocalStack Lab AWS 학습 환경 | Phase 13 |
+| Terraform IaC 통합 (Init/Plan/Apply/Destroy) | Phase 13 |
+| 사용자별 격리 LocalStack 컨테이너 | Phase 13 |
+| cytoscape.js 토폴로지 시각화 | Phase 13 |
+| 사전 정의 Terraform 템플릿 5종 | Phase 13 |
+| CI/CD 배포 엔드포인트 | Phase 13 |
+| 멤버 초대/관리 (멀티테넌트) | Phase 13 |
 
-### 19.3 향후 계획
+### 20.3 향후 계획
 
 | 항목 | 내용 | 예상 기술 스택 |
 |------|------|---------------|
@@ -1212,7 +1356,7 @@ Phase 0에서 방화벽 테스트용으로 생성했던 `test.namgun.or.kr:47264
 
 ---
 
-## 20. 기술 스택 요약
+## 21. 기술 스택 요약
 
 | 분류 | 기술 |
 |------|------|
@@ -1222,7 +1366,8 @@ Phase 0에서 방화벽 테스트용으로 생성했던 `test.namgun.or.kr:47264
 | 포털 백엔드 | FastAPI, SQLAlchemy 2.0 (async), asyncpg |
 | 리버스 프록시 | Nginx (Rocky Linux 10) |
 | TLS 인증서 | Let's Encrypt (certbot + ACME) |
-| 컨테이너 (Docker) | Authentik, Portal (frontend + backend + nginx + PostgreSQL), Gitea, RustDesk Pro, Game Panel |
+| IaC / 학습 | Terraform 1.9.8, LocalStack 3.8, boto3, cytoscape.js |
+| 컨테이너 (Docker) | Authentik, Portal (frontend + backend + nginx + PostgreSQL), Gitea, RustDesk Pro, Game Panel, LocalStack Lab |
 | 컨테이너 (Podman) | Stalwart Mail, LDAP Outpost |
 | 메일 서버 | Stalwart Mail Server (RocksDB) |
 | 화상회의 | BigBlueButton 3.0 |
@@ -1234,9 +1379,9 @@ Phase 0에서 방화벽 테스트용으로 생성했던 `test.namgun.or.kr:47264
 
 ---
 
-## 21. 보안 고려사항
+## 22. 보안 고려사항
 
-### 21.1 적용된 보안 정책
+### 22.1 적용된 보안 정책
 
 - ISMS-P 기준 보안 헤더 전 사이트 적용
 - TLS 1.2+ 강제 (HSTS preload)
@@ -1251,7 +1396,7 @@ Phase 0에서 방화벽 테스트용으로 생성했던 `test.namgun.or.kr:47264
 - firewalld 방화벽 전 서버 활성화 (Phase 12)
 - 정기 OS 보안 패치 적용 (Phase 12)
 
-### 21.2 계획된 보안 강화
+### 22.2 계획된 보안 강화
 
 - PTR 레코드 등록으로 역방향 DNS 검증 완성
 - Authentik MFA(다중 인증) 정책 강화
@@ -1259,4 +1404,4 @@ Phase 0에서 방화벽 테스트용으로 생성했던 `test.namgun.or.kr:47264
 
 ---
 
-*문서 끝. 최종 갱신: 2026-02-22*
+*문서 끝. 최종 갱신: 2026-02-22 (v1.5)*

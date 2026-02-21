@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     authentik_users_group_pk: str = ""
     authentik_admins_group_pk: str = ""
 
+    # Gitea
+    gitea_url: str = "http://192.168.0.50:3000"
+    gitea_token: str = ""
+
     # Portal OAuth Provider (for Gitea etc.)
     oauth_clients_json: str = "{}"
 

@@ -51,7 +51,8 @@ Authentik  Gitea    Stalwart     BigBlueButton  OMV(NFS)     Game Panel
 - **파일 관리**: NFS 기반 웹 파일 브라우저 (업로드/다운로드/공유링크)
 - **메일**: Stalwart JMAP 기반 웹메일 클라이언트
 - **화상회의**: BBB API 기반 회의 생성/참가/녹화 관리
-- **대시보드**: 서비스 상태 실시간 모니터링
+- **Git**: Gitea API 기반 저장소 브라우징, 코드 뷰어 (구문 강조), 이슈/PR 관리
+- **대시보드**: 종합 홈화면 (서비스 상태, 최근 메일/Git 활동, 회의, 게임서버, 스토리지, 바로가기)
 
 ### 관리자 패널
 - 사용자 승인/거절/비활성화
@@ -84,6 +85,7 @@ cp .env.example .env
 - `AUTHENTIK_*_GROUP_PK` — Authentik 그룹 UUID
 - `BBB_URL`, `BBB_SECRET` — BigBlueButton API
 - `STALWART_URL` — Stalwart Mail JMAP 엔드포인트
+- `GITEA_URL`, `GITEA_TOKEN` — Gitea API URL 및 관리자 토큰
 
 ## 프로젝트 구조
 
@@ -98,6 +100,8 @@ namgun-portal/
 │       ├── files/               # 파일 브라우저 (NFS)
 │       ├── mail/                # 메일 (JMAP 클라이언트)
 │       ├── meetings/            # 화상회의 (BBB API)
+│       ├── git/                 # Git (Gitea API 클라이언트)
+│       ├── dashboard/            # 대시보드 (게임서버 상태 등)
 │       ├── services/            # 서비스 헬스체크
 │       └── db/                  # DB 모델, 세션
 ├── frontend/
@@ -123,6 +127,8 @@ namgun-portal/
 | 파일 | `/api/files/*` | 파일 목록/업로드/다운로드/이동/삭제/공유 |
 | 메일 | `/api/mail/*` | 메일박스, 메시지 CRUD, 전송, 첨부파일 |
 | 회의 | `/api/meetings/*` | 회의 생성/참가/종료, 녹화 관리 |
+| Git | `/api/git/*` | 저장소 검색, 코드 브라우징, 이슈/PR |
+| 대시보드 | `/api/dashboard/*` | 게임서버 상태 조회 |
 | 서비스 | `/api/services/*` | 서비스 상태 조회 |
 
 ## 문서
@@ -140,6 +146,8 @@ namgun-portal/
 | v0.2.0 | 2026-02-20 | 서버사이드 인증 전환, 포털 OIDC 제공자, Gitea SSO |
 | v0.3.0 | 2026-02-21 | 승인제 회원가입, 관리자 패널, 권한 관리, 프로필/비밀번호 관리 |
 | v0.4.0 | 2026-02-21 | BBB 새 탭 회의 참가 + 세션 종료 시 자동 탭 닫힘, Greenlight 로그인/등록 차단 |
+| v0.5.0 | 2026-02-21 | Gitea 포털 내재화 — 저장소 브라우징, 코드 뷰어 (구문 강조), 이슈/PR 관리 |
+| v0.5.1 | 2026-02-21 | 대시보드 홈화면 리뉴얼 — 인사말, 서비스 상태 바, 최근 메일/Git, 회의, 게임서버, 스토리지, 바로가기 |
 
 ## 라이선스
 

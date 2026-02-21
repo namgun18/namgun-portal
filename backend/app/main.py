@@ -13,6 +13,8 @@ from app.files.router import router as files_router
 from app.mail.router import router as mail_router
 from app.meetings.router import router as meetings_router
 from app.admin.router import router as admin_router
+from app.git.router import router as git_router
+from app.dashboard.router import router as dashboard_router
 
 settings = get_settings()
 _health_task = None
@@ -38,7 +40,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.3.0",
+    version="0.5.1",
     lifespan=lifespan,
     docs_url="/api/docs" if settings.debug else None,
     redoc_url=None,
@@ -51,8 +53,10 @@ app.include_router(files_router)
 app.include_router(mail_router)
 app.include_router(meetings_router)
 app.include_router(admin_router)
+app.include_router(git_router)
+app.include_router(dashboard_router)
 
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "service": settings.app_name, "version": "0.1.0"}
+    return {"status": "ok", "service": settings.app_name, "version": "0.5.1"}

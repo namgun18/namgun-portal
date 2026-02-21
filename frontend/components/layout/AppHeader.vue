@@ -53,6 +53,13 @@ function toggleDark() {
             회의
           </NuxtLink>
           <NuxtLink
+            to="/git"
+            class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
+            :class="route.path === '/git' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'"
+          >
+            Git
+          </NuxtLink>
+          <NuxtLink
             v-if="user.is_admin"
             to="/admin/users"
             class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
@@ -172,6 +179,14 @@ function toggleDark() {
         :class="route.path === '/meetings' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'"
       >
         회의
+      </NuxtLink>
+      <NuxtLink
+        to="/git"
+        @click="mobileMenuOpen = false"
+        class="block px-3 py-2 text-sm font-medium rounded-md transition-colors"
+        :class="route.path === '/git' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'"
+      >
+        Git
       </NuxtLink>
       <NuxtLink
         v-if="user.is_admin"

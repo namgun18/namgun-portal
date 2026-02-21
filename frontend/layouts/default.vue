@@ -1,9 +1,8 @@
 <template>
-  <div class="min-h-screen flex flex-col">
+  <div class="h-screen flex flex-col overflow-hidden">
     <LayoutAppHeader />
-    <main class="flex-1 container px-4 sm:px-6 lg:px-8 py-6 mx-auto max-w-[1400px]">
+    <main class="flex-1 min-h-0">
       <slot />
     </main>
-    <LayoutAppFooter />
   </div>
 </template>

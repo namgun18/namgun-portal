@@ -100,7 +100,7 @@ async function handleDrop(e: DragEvent) {
 
 <template>
   <div
-    class="flex h-[calc(100vh-3.5rem)] overflow-hidden relative"
+    class="flex h-full overflow-hidden relative"
     @dragover="handleDragOver"
     @dragleave="handleDragLeave"
     @drop="handleDrop"
@@ -138,7 +138,7 @@ async function handleDrop(e: DragEvent) {
     </div>
 
     <!-- Main content -->
-    <div class="flex-1 flex flex-col min-w-0">
+    <div class="flex-1 flex flex-col min-w-0 min-h-0">
       <!-- Command bar -->
       <FilesFileCommandBar
         @upload="showUpload = true"

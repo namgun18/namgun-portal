@@ -173,13 +173,13 @@ async function handlePasswordSubmit() {
 </script>
 
 <template>
-  <div>
-    <div class="mb-6">
+  <div class="h-full overflow-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div class="mb-4">
       <h1 class="text-2xl font-bold tracking-tight">프로필</h1>
       <p class="text-muted-foreground mt-1">계정 정보 및 비밀번호를 관리하세요</p>
     </div>
 
-    <div class="grid gap-6 max-w-2xl">
+    <div class="grid gap-4 lg:grid-cols-2">
       <!-- Profile section -->
       <div class="rounded-lg border bg-card p-6 space-y-4">
         <h2 class="text-lg font-semibold">사용자 정보</h2>
@@ -251,7 +251,7 @@ async function handlePasswordSubmit() {
         <div v-else-if="signatures.length === 0" class="text-sm text-muted-foreground">
           등록된 서명이 없습니다. 새 서명을 추가하세요.
         </div>
-        <div v-else class="space-y-2">
+        <div v-else class="space-y-2 max-h-[200px] overflow-auto">
           <div
             v-for="sig in signatures"
             :key="sig.id"

@@ -61,15 +61,6 @@ export interface UploadedAttachment {
 
 export type ComposeMode = 'new' | 'reply' | 'replyAll' | 'forward'
 
-export interface ComposeDefaults {
-  to: EmailAddress[]
-  cc: EmailAddress[]
-  subject: string
-  body: string
-  in_reply_to: string | null
-  references: string[]
-}
-
 // Module-level singleton state
 const mailboxes = ref<Mailbox[]>([])
 const selectedMailboxId = ref<string | null>(null)
@@ -81,9 +72,6 @@ const limit = ref(50)
 const loadingMailboxes = ref(false)
 const loadingMessages = ref(false)
 const loadingMessage = ref(false)
-const showCompose = ref(false)
-const composeMode = ref<ComposeMode>('new')
-const composeDefaults = ref<ComposeDefaults | null>(null)
 const sending = ref(false)
 const searchQuery = ref('')
 const selectedIds = ref<Set<string>>(new Set())
@@ -281,8 +269,6 @@ export function useMail() {
         method: 'POST',
         body: data,
       })
-      showCompose.value = false
-      composeDefaults.value = null
       // Refresh if in sent folder
       await fetchMessages()
       await fetchMailboxes()
@@ -325,55 +311,15 @@ export function useMail() {
   }
 
   function openCompose(mode: ComposeMode = 'new', msg?: MessageDetail | null) {
-    composeMode.value = mode
-    if (mode === 'new' || !msg) {
-      composeDefaults.value = { to: [], cc: [], subject: '', body: '', in_reply_to: null, references: [] }
-    } else if (mode === 'reply') {
-      const replyTo = msg.reply_to.length > 0 ? msg.reply_to : msg.from_
-      composeDefaults.value = {
-        to: replyTo,
-        cc: [],
-        subject: msg.subject?.startsWith('Re:') ? msg.subject : `Re: ${msg.subject || ''}`,
-        body: _buildQuoteBody(msg),
-        in_reply_to: msg.id,
-        references: [],
-      }
-    } else if (mode === 'replyAll') {
-      const replyTo = msg.reply_to.length > 0 ? msg.reply_to : msg.from_
-      composeDefaults.value = {
-        to: replyTo,
-        cc: [...msg.to, ...msg.cc],
-        subject: msg.subject?.startsWith('Re:') ? msg.subject : `Re: ${msg.subject || ''}`,
-        body: _buildQuoteBody(msg),
-        in_reply_to: msg.id,
-        references: [],
-      }
-    } else if (mode === 'forward') {
-      composeDefaults.value = {
-        to: [],
-        cc: [],
-        subject: msg.subject?.startsWith('Fwd:') ? msg.subject : `Fwd: ${msg.subject || ''}`,
-        body: _buildForwardBody(msg),
-        in_reply_to: null,
-        references: [],
-      }
+    const params = new URLSearchParams({ mode })
+    if (msg && mode !== 'new') {
+      params.set('msgId', msg.id)
     }
-    showCompose.value = true
-  }
-
-  function _buildQuoteBody(msg: MessageDetail): string {
-    const from = msg.from_.map(a => a.name || a.email).join(', ')
-    const date = msg.received_at ? new Date(msg.received_at).toLocaleString('ko-KR') : ''
-    const body = msg.text_body || ''
-    return `\n\n${date}, ${from}:\n> ${body.split('\n').join('\n> ')}`
-  }
-
-  function _buildForwardBody(msg: MessageDetail): string {
-    const from = msg.from_.map(a => `${a.name || ''} <${a.email}>`).join(', ')
-    const to = msg.to.map(a => `${a.name || ''} <${a.email}>`).join(', ')
-    const date = msg.received_at ? new Date(msg.received_at).toLocaleString('ko-KR') : ''
-    const body = msg.text_body || ''
-    return `\n\n---------- Forwarded message ----------\nFrom: ${from}\nDate: ${date}\nSubject: ${msg.subject || ''}\nTo: ${to}\n\n${body}`
+    window.open(
+      `/mail/compose?${params.toString()}`,
+      '_blank',
+      'width=700,height=600,menubar=no,toolbar=no,location=no,status=no',
+    )
   }
 
   function clearSelectedMessage() {
@@ -399,6 +345,15 @@ export function useMail() {
     window.open(url, '_blank')
   }
 
+  // Listen for compose window postMessage
+  if (import.meta.client) {
+    window.addEventListener('message', (event: MessageEvent) => {
+      if (event.data?.type === 'mail-sent') {
+        refresh()
+      }
+    })
+  }
+
   async function refresh() {
     await Promise.all([fetchMailboxes(), fetchMessages()])
   }
@@ -415,9 +370,6 @@ export function useMail() {
     loadingMailboxes: readonly(loadingMailboxes),
     loadingMessages: readonly(loadingMessages),
     loadingMessage: readonly(loadingMessage),
-    showCompose,
-    composeMode: readonly(composeMode),
-    composeDefaults: readonly(composeDefaults),
     sending: readonly(sending),
     searchQuery,
     selectedIds,

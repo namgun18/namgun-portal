@@ -11,7 +11,7 @@ function toggleDark() {
 
 <template>
   <header class="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-    <div class="flex h-14 items-center justify-between px-3 sm:px-4 lg:px-8 mx-auto max-w-[1400px]">
+    <div class="flex h-14 items-center justify-between px-3 sm:px-4 lg:px-6">
       <!-- Logo + Nav -->
       <div class="flex items-center gap-2 sm:gap-6">
         <NuxtLink to="/" class="flex items-center gap-2 font-bold text-lg shrink-0">

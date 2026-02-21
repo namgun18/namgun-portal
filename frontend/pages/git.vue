@@ -27,8 +27,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-3.5rem)] overflow-hidden">
-    <div class="flex-1 flex flex-col min-w-0">
+  <div class="flex h-full overflow-hidden">
+    <div class="flex-1 flex flex-col min-w-0 min-h-0">
       <!-- Command bar -->
       <GitCommandBar />
 

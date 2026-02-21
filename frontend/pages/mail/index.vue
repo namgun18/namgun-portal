@@ -12,7 +12,6 @@ const {
   openCompose,
   refresh,
   selectedMessage,
-  showCompose,
 } = useMail()
 
 const showMobileSidebar = ref(false)
@@ -24,7 +23,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-3.5rem)] overflow-hidden relative">
+  <div class="flex h-full overflow-hidden relative">
     <!-- Mobile sidebar overlay -->
     <div
       v-if="showMobileSidebar"
@@ -45,7 +44,7 @@ onMounted(async () => {
     </div>
 
     <!-- Main content -->
-    <div class="flex-1 flex flex-col min-w-0">
+    <div class="flex-1 flex flex-col min-w-0 min-h-0">
       <!-- Command bar -->
       <div class="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 border-b bg-background">
         <!-- Mobile sidebar toggle -->
@@ -89,7 +88,7 @@ onMounted(async () => {
       <div class="flex flex-1 min-h-0">
         <!-- Message list (hide on mobile when viewing a message) -->
         <div
-          class="flex flex-col min-w-0"
+          class="flex flex-col min-w-0 min-h-0"
           :class="selectedMessage ? 'hidden md:flex md:w-80 md:shrink-0 md:border-r' : 'flex-1'"
         >
           <MailList />

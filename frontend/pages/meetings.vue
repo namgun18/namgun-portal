@@ -73,7 +73,7 @@ async function refresh() {
 
 <template>
   <!-- 학습 분석 대시보드 (iframe) -->
-  <div v-if="analyticsUrl" class="flex flex-col h-[calc(100vh-3.5rem)]">
+  <div v-if="analyticsUrl" class="flex flex-col h-full">
     <div class="flex items-center justify-between px-4 py-1.5 border-b bg-background">
       <div class="flex items-center gap-2 min-w-0">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-primary shrink-0">
@@ -98,9 +98,9 @@ async function refresh() {
   </div>
 
   <!-- 기존 회의/녹화 UI -->
-  <div v-else class="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+  <div v-else class="flex h-full overflow-hidden">
     <!-- Main content -->
-    <div class="flex-1 flex flex-col min-w-0">
+    <div class="flex-1 flex flex-col min-w-0 min-h-0">
       <!-- Command bar -->
       <div class="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 border-b bg-background">
         <button

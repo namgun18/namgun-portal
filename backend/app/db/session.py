@@ -1,3 +1,5 @@
+import asyncio
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -26,9 +28,17 @@ async def _migrate_columns(conn):
 
 
 async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await _migrate_columns(conn)
+    for attempt in range(5):
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+                await _migrate_columns(conn)
+            print(f"[DB] init_db 완료 (attempt {attempt + 1})")
+            return
+        except Exception as e:
+            print(f"[DB] init_db 실패 (attempt {attempt + 1}): {e}")
+            if attempt < 4:
+                await asyncio.sleep(2)
 
 
 async def get_db():

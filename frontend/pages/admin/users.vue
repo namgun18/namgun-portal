@@ -120,7 +120,7 @@ function formatDate(dateStr: string | null) {
 </script>
 
 <template>
-  <div v-if="user?.is_admin">
+  <div v-if="user?.is_admin" class="h-full overflow-auto px-4 sm:px-6 lg:px-8 py-6">
     <div class="mb-6">
       <h1 class="text-2xl font-bold tracking-tight">사용자 관리</h1>
       <p class="text-muted-foreground mt-1">회원가입 승인 및 사용자를 관리하세요</p>

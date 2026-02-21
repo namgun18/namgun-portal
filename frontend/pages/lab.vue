@@ -12,6 +12,38 @@ const { fetchEnvironments, selectedEnv } = useLab()
 const showMobileSidebar = ref(false)
 const showMembers = ref(false)
 const activePanel = ref<'terraform' | 'resources'>('terraform')
+const resourcesCollapsed = ref(false)
+
+// Resizable topology/resources split
+const rightPanelRef = ref<HTMLElement | null>(null)
+const topologyPercent = ref(65) // topology takes 65% by default
+const isResizing = ref(false)
+
+function startResize(e: MouseEvent) {
+  e.preventDefault()
+  isResizing.value = true
+  const panel = rightPanelRef.value
+  if (!panel) return
+
+  const startY = e.clientY
+  const startPercent = topologyPercent.value
+  const panelRect = panel.getBoundingClientRect()
+
+  function onMove(ev: MouseEvent) {
+    const dy = ev.clientY - startY
+    const newPercent = startPercent + (dy / panelRect.height) * 100
+    topologyPercent.value = Math.max(20, Math.min(85, newPercent))
+  }
+
+  function onUp() {
+    isResizing.value = false
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', onUp)
+  }
+
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', onUp)
+}
 
 onMounted(async () => {
   await fetchEnvironments()
@@ -19,7 +51,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-3.5rem)] overflow-hidden relative">
+  <div class="flex h-full overflow-hidden relative">
     <!-- Mobile sidebar overlay -->
     <div
       v-if="showMobileSidebar"
@@ -41,7 +73,7 @@ onMounted(async () => {
     </div>
 
     <!-- Main content -->
-    <div class="flex-1 flex flex-col min-w-0">
+    <div class="flex-1 flex flex-col min-w-0 min-h-0">
       <!-- Command bar -->
       <div class="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 border-b bg-background">
         <!-- Mobile sidebar toggle -->
@@ -69,8 +101,8 @@ onMounted(async () => {
 
         <div class="flex-1" />
 
-        <!-- Panel tabs -->
-        <div v-if="selectedEnv" class="flex items-center rounded-md border overflow-hidden">
+        <!-- Panel tabs (mobile only) -->
+        <div v-if="selectedEnv" class="lg:hidden flex items-center rounded-md border overflow-hidden">
           <button
             @click="activePanel = 'terraform'"
             class="px-2.5 py-1 text-xs font-medium transition-colors"
@@ -100,16 +132,47 @@ onMounted(async () => {
       </div>
 
       <!-- Main area -->
-      <div v-if="selectedEnv" class="flex-1 flex flex-col min-h-0 overflow-hidden">
-        <!-- Topology graph -->
-        <div class="h-[250px] sm:h-[300px] shrink-0 p-2 sm:p-3 pb-0">
-          <LabTopology />
+      <div v-if="selectedEnv" class="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+        <!-- Left: Terraform (desktop) / Tab content (mobile) -->
+        <div class="flex-1 min-h-0 lg:min-w-0 flex flex-col">
+          <!-- Mobile: stacked tab content -->
+          <div class="lg:hidden flex-1 flex flex-col min-h-0">
+            <div v-if="activePanel === 'terraform'" class="flex-1 min-h-0 p-2 sm:p-3">
+              <LabTerraform class="h-full" />
+            </div>
+            <div v-else class="flex-1 min-h-0 flex flex-col">
+              <div class="h-[200px] sm:h-[250px] shrink-0 p-2 sm:p-3 pb-0">
+                <LabTopology />
+              </div>
+              <div class="flex-1 min-h-0 p-2 sm:p-3 pt-2">
+                <LabResourcePanel class="h-full overflow-y-auto" />
+              </div>
+            </div>
+          </div>
+          <!-- Desktop: Terraform always visible -->
+          <div class="hidden lg:flex flex-1 min-h-0 p-3">
+            <LabTerraform class="h-full w-full" />
+          </div>
         </div>
 
-        <!-- Terraform / Resources panel -->
-        <div class="flex-1 min-h-0 p-2 sm:p-3 pt-2">
-          <LabTerraform v-if="activePanel === 'terraform'" class="h-full" />
-          <LabResourcePanel v-else class="h-full overflow-y-auto" />
+        <!-- Right: Topology + Resources (desktop only, resizable) -->
+        <div ref="rightPanelRef" class="hidden lg:flex lg:w-1/2 xl:w-[45%] flex-col min-h-0 border-l">
+          <!-- Topology -->
+          <div class="min-h-0 overflow-hidden p-3" :style="{ height: topologyPercent + '%' }">
+            <LabTopology />
+          </div>
+          <!-- Resize handle -->
+          <div
+            @mousedown="startResize"
+            class="h-1.5 shrink-0 cursor-row-resize flex items-center justify-center hover:bg-accent/60 transition-colors border-y"
+            :class="isResizing ? 'bg-primary/20' : 'bg-transparent'"
+          >
+            <div class="w-8 h-0.5 rounded-full bg-muted-foreground/30" />
+          </div>
+          <!-- Resources -->
+          <div class="min-h-0 overflow-y-auto p-3" :style="{ height: (100 - topologyPercent) + '%' }">
+            <LabResourcePanel class="h-full" />
+          </div>
         </div>
       </div>
 

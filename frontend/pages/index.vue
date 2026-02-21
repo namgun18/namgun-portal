@@ -3,7 +3,7 @@ definePageMeta({ layout: 'default' })
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="h-full overflow-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
     <!-- Greeting -->
     <DashboardGreeting />
 

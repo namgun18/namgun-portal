@@ -86,7 +86,7 @@ function handleReadClick(e: Event, id: string) {
 </script>
 
 <template>
-  <div class="flex flex-col flex-1 min-w-0">
+  <div class="flex flex-col flex-1 min-w-0 min-h-0">
     <!-- Search bar -->
     <div class="px-3 sm:px-4 py-2 border-b">
       <div class="relative">
@@ -145,7 +145,7 @@ function handleReadClick(e: Event, id: string) {
     <!-- Message list -->
     <div v-else class="flex-1 overflow-auto">
       <div
-        v-for="msg in messages"
+        v-for="(msg, index) in messages"
         :key="msg.id"
         @click="openMessage(msg.id)"
         class="flex items-start gap-3 px-3 sm:px-4 py-3 border-b cursor-pointer transition-colors hover:bg-accent/50"
@@ -154,6 +154,11 @@ function handleReadClick(e: Event, id: string) {
           msg.is_unread ? 'bg-primary/5' : '',
         ]"
       >
+        <!-- Row number -->
+        <span class="hidden sm:inline-flex pt-1 shrink-0 w-8 text-xs text-muted-foreground justify-end tabular-nums">
+          {{ currentPage * limit + index + 1 }}
+        </span>
+
         <!-- Checkbox / Unread dot -->
         <div class="pt-1 shrink-0 w-5 flex items-center justify-center">
           <input

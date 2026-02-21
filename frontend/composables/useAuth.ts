@@ -13,10 +13,17 @@ export const useAuth = () => {
   const user = useState<User | null>('auth-user', () => null)
   const loading = useState<boolean>('auth-loading', () => true)
 
+  // SSR에서 브라우저 쿠키를 전달하기 위해 요청 헤더 캡처
+  const ssrHeaders = import.meta.server ? useRequestHeaders(['cookie']) : undefined
+
   const fetchUser = async () => {
     try {
       loading.value = true
-      const data = await $fetch<User>('/api/auth/me', { credentials: 'include' })
+      const opts: Record<string, any> = { credentials: 'include' }
+      if (ssrHeaders?.cookie) {
+        opts.headers = { cookie: ssrHeaders.cookie }
+      }
+      const data = await $fetch<User>('/api/auth/me', opts)
       user.value = data
     } catch {
       user.value = null

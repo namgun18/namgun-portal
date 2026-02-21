@@ -2,7 +2,7 @@
 const { openCompose } = useMail()
 
 const shortcuts = [
-  { label: '메일 쓰기', icon: 'mail', action: () => { openCompose('new'); navigateTo('/mail') } },
+  { label: '메일 쓰기', icon: 'mail', action: () => openCompose('new') },
   { label: '회의 시작', icon: 'video', to: '/meetings' },
   { label: '파일 업로드', icon: 'upload', to: '/files' },
   { label: 'Git 저장소', icon: 'git', to: '/git' },

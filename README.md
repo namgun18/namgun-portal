@@ -1,6 +1,8 @@
-# namgun.or.kr 종합 포털
+# namgun.or.kr 종합 포털 — v1.0.0
 
 셀프 호스팅 통합 플랫폼. Authentik SSO를 중심으로 Git, 메일, 화상회의, 파일 관리, 게임 서버 등 독립 서비스를 하나의 포털 UI로 통합한다.
+
+> **v1.0.0 정식 릴리즈** (2026-02-22) — 15개 Phase 완료, SELinux Enforcing, 전 서비스 네이티브/컨테이너 안정 운영
 
 ## 아키텍처
 
@@ -30,7 +32,7 @@ Authentik  Gitea    Stalwart     BigBlueButton  OMV(NFS)     Game Panel
 | 백엔드 | FastAPI, SQLAlchemy 2.0 (async), asyncpg |
 | 인증 | Authentik 2025.10.4 (OIDC, LDAP, Flow Executor API) |
 | 데이터베이스 | PostgreSQL 16 |
-| 메일 | Stalwart Mail Server v0.15 (JMAP, LDAP) |
+| 메일 | Stalwart Mail Server v0.15.5 (JMAP, LDAP, 네이티브 systemd) |
 | 화상회의 | BigBlueButton 3.0 |
 | 파일 스토리지 | NFS v4.1 (OpenMediaVault) |
 | Git | Gitea 1.25.4 |
@@ -166,6 +168,7 @@ namgun-portal/
 | v0.6.1 | 2026-02-22 | UI 개선 — Lab 좌우 분할·리사이즈, 메일 팝업 작성·서명 선택, SSR 쿠키 전달, 캐시 제어 |
 | v0.7.0 | 2026-02-22 | 캘린더/연락처 — JMAP 기반 캘린더(월/주/일 뷰, 공유), 연락처 관리, CalDAV/CardDAV 동기화, 데모 사이트(demo.namgun.or.kr) |
 | v0.7.1 | 2026-02-22 | 데모 사이트 버그 수정, SSR 하이드레이션 오류 근본 해결, JMAP 연락처/캘린더 호환성 수정, Nginx 캐시 헤더 강화 |
+| **v1.0.0** | **2026-02-22** | **정식 릴리즈** — Stalwart+LDAP 네이티브 전환, SELinux Enforcing, WSL Docker 포트 자동복구, 전체 인프라 안정화 |
 
 ## 라이선스
 

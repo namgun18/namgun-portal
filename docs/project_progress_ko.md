@@ -20,6 +20,7 @@
 | v1.7 | 2026-02-22 | 남기완 | Phase 15 (캘린더/연락처 + 데모 사이트) 추가 |
 | v1.8 | 2026-02-22 | 남기완 | v0.7.1 데모 사이트 버그 수정 + Nginx 캐시 헤더 강화 추가 |
 | v1.9 | 2026-02-22 | 남기완 | Stalwart + LDAP Outpost 네이티브 마이그레이션 (Podman → systemd) |
+| v2.0 | 2026-02-22 | 남기완 | **v1.0.0 정식 릴리즈** — SELinux Enforcing, 잔여 작업 정리, WSL Docker 포트 자동복구 |
 
 ---
 
@@ -1583,11 +1584,13 @@ location = /.well-known/carddav { return 301 /dav/; }
 ### 22.1 즉시 조치 필요
 
 - [x] DKIM `dkim=pass` 확인 (DNS 캐시 만료 후)
-- [ ] PTR 레코드 등록 (SK 브로드밴드, `211.244.144.69 → mail.namgun.or.kr`)
+- [ ] PTR 레코드 등록 (SK 브로드밴드, `211.244.144.69 → mail.namgun.or.kr`) — 담주 요청 예정
 - [ ] `mail.namgun.or.kr`에 대한 SPF TXT 레코드 추가 (SPF_HELO_NONE 해결)
 - [ ] Authentik 계정 비밀번호 설정: tsha, nahee14, kkb
-- [ ] Nginx/Mail 서버 커널 재부팅 (보안 패치 적용 완료, 신규 커널 로드 필요)
-- [ ] 메일서버 SELinux Enforcing 전환 (재부팅 후 서비스 정상 확인 필요)
+- [x] Nginx/Mail 서버 커널 재부팅 (5.14.0-611.30.1.el9_7, 2026-02-22 적용 완료)
+- [x] 메일서버 SELinux Enforcing 전환 (2026-02-22 적용, AVC 거부 0건 확인 후 전환)
+- [x] Stalwart + LDAP Outpost 네이티브 마이그레이션 (Podman → systemd, 2026-02-22)
+- [x] WSL Docker 포트 바인딩 자동 복구 서비스 (docker-fix-ports.service, 2026-02-22)
 
 ### 22.2 완료된 항목
 
@@ -1723,8 +1726,8 @@ location = /.well-known/carddav { return 301 /dav/; }
 
 - PTR 레코드 등록으로 역방향 DNS 검증 완성
 - Authentik MFA(다중 인증) 정책 강화
-- 메일서버 SELinux Permissive → Enforcing 전환 (재부팅 후 검증 필요)
+- ~~메일서버 SELinux Enforcing 전환~~ → **완료** (2026-02-22, AVC 0건 확인 후 적용)
 
 ---
 
-*문서 끝. 최종 갱신: 2026-02-22 (v1.8)*
+*문서 끝. 최종 갱신: 2026-02-22 (v2.0 — 프로젝트 v1.0.0 정식 릴리즈)*

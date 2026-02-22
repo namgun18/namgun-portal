@@ -66,18 +66,31 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 ### 3.1 물리/논리 구성도
 
 ```
-인터넷
+인터넷 (SK브로드밴드, AS17613)
   │
+  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Check Point Quantum Security Gateway 3100                      │
+│  (IPS / Anti-Bot / SandBlast Threat Prevention / URL Filtering) │
+│  평가판 라이센스 (파트너사 무제한 갱신)                             │
+└──────────────────────┬──────────────────────────────────────────┘
+  │                    │
   ├─ 211.244.144.47 (공인 IP, 메인 서비스)
   │    └─ 포트포워딩 → 192.168.0.150 (Nginx Reverse Proxy)
   │
   ├─ 211.244.144.69 (공인 IP, MX 레코드)
   │    └─ 직접 연결 → 192.168.0.250 (Stalwart Mail)
   │
-  ┌──────────────────── 내부망 192.168.0.0/24 ────────────────────┐
+  ┌──── MikroTik CRS317-1G-16S+ (10G SFP+ x16 스위치) ──────────┐
+  │          내부망 192.168.0.0/24 — 10Gbps SFP+ 백본              │
   │                                                                │
-  │  [192.168.0.50] Windows Host (Dual Xeon Gold 6138, 128GB)     │
-  │    └─ WSL2 / Docker                                            │
+  │  [192.168.0.50] Windows Host — 메인 서버                       │
+  │    HW: Dual Xeon Gold 6138 (40C/80T), 128GB DDR4 ECC          │
+  │        ASUS 서드파티 서버보드, 4U 산업용 케이스                   │
+  │        Intel X520-DA2 10G SFP+ NIC                             │
+  │        전체 팬 Noctua 교체 (정숙 운영)                           │
+  │    SW: Windows Server / Hyper-V                                │
+  │    └─ WSL2 (192.168.0.150) / Docker                            │
   │       ├─ Authentik (server + worker + PostgreSQL 16)           │
   │       ├─ Portal Stack                                          │
   │       │    ├─ portal-frontend (Nuxt 3 SSR, :3000)             │
@@ -87,27 +100,36 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
   │       ├─ Gitea 1.25.4                                          │
   │       ├─ RustDesk Pro (hbbs + hbbr)                            │
   │       ├─ Game Panel (backend + nginx + palworld)               │
-│       └─ LocalStack Lab (사용자별 동적 컨테이너, lab-net)       │
-  │       ├─ Demo Frontend (Nuxt 3 SSR, :3001, demo mode)      │
+  │       ├─ LocalStack Lab (사용자별 동적 컨테이너, lab-net)       │
+  │       └─ Demo Frontend (Nuxt 3 SSR, :3001, demo mode)         │
+  │                                                                │
+  │  [192.168.0.50] Hyper-V VM — Nginx (Rocky Linux 10)           │
+  │    └─ 중앙 리버스 프록시, TLS Termination (192.168.0.150)       │
+  │                                                                │
+  │  [192.168.0.50] Hyper-V VM — Mail (Rocky Linux 9.7)           │
+  │    IP: 192.168.0.250 / SELinux Enforcing                       │
+  │    └─ 네이티브 systemd 서비스                                    │
+  │       ├─ stalwart-mail.service (v0.15.5)                       │
+  │       └─ authentik-ldap-outpost.service (2025.10.4)            │
+  │                                                                │
+  │  [192.168.0.249] Hyper-V VM — BigBlueButton 3.0 (화상회의)     │
+  │    └─ BBB API (SHA256 checksum 인증)                            │
   │                                                                │
   │  [192.168.0.100] OMV (OpenMediaVault) — NAS                   │
   │    └─ NFSv4 서버 (/export/root, fsid=0)                        │
   │       └─ /portal → Docker NFS volume (/storage)                │
   │                                                                │
-  │  [192.168.0.150] Hyper-V VM — Nginx (Rocky Linux 10)          │
-  │    └─ 중앙 리버스 프록시, TLS Termination                       │
-  │                                                                │
-  │  [192.168.0.249] BigBlueButton 3.0 (화상회의)                   │
-  │    └─ BBB API (SHA256 checksum 인증)                            │
-  │                                                                │
-  │  [192.168.0.250] Hyper-V VM — Mail (Rocky Linux 9.7)          │
-  │    └─ Podman (rootless)                                        │
-  │       ├─ Stalwart Mail Server (network_mode: host)             │
-  │       └─ Authentik LDAP Outpost (sidecar)                      │
-  │                                                                │
   │  [192.168.0.251] Pi-Hole DNS (내부 1차 DNS)                    │
   │                                                                │
+  │  [게임용 PC] ── Intel X520-DA2 10G SFP+ ── 서버 직결            │
+  │                                                                │
   └────────────────────────────────────────────────────────────────┘
+
+네트워크 사양:
+  - WAN: SK브로드밴드 고정 공인IP x2 (211.244.144.47, .69)
+  - LAN: 10Gbps SFP+ (서버↔PC↔NAS), DAC/광모듈 직결
+  - 보안: Check Point IPS + Threat Prevention → firewalld → SELinux (다층 방어)
+  - DNS: Pi-Hole (내부) + Windows Server DNS (AD) + 공인 DNS (namgun.or.kr)
 ```
 
 ### 3.2 서비스 현황 종합
@@ -121,7 +143,8 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 | Game Panel | game.namgun.or.kr | 192.168.0.50 (Docker) | Discord OAuth2 | 운영 중 |
 | BBB (화상회의) | meet.namgun.or.kr | 192.168.0.249 | OIDC (포털 내 통합) | 운영 중 |
 | OMV/Files | — | 192.168.0.100 (NFS) | 포털 내 파일브라우저 | 운영 중 |
-| Stalwart Mail | mail.namgun.or.kr | 192.168.0.250 (Podman) | LDAP + OIDC, 포털 내 iframe 통합 | 운영 중 |
+| Stalwart Mail | mail.namgun.or.kr | 192.168.0.250 (네이티브 systemd) | LDAP + OIDC, 포털 내 iframe 통합 | 운영 중 |
+| LDAP Outpost | — | 192.168.0.250 (네이티브 systemd) | Authentik → Stalwart LDAP 인증 | 운영 중 |
 | LDAP Outpost | — | 192.168.0.250 (Podman sidecar) | — | 운영 중 |
 | Nginx Proxy | *.namgun.or.kr | 192.168.0.150 (VM) | — | 운영 중 |
 | Pi-Hole | — | 192.168.0.251 | — | 운영 중 |
@@ -1686,22 +1709,33 @@ location = /.well-known/carddav { return 301 /dav/; }
 
 | 분류 | 기술 |
 |------|------|
+| **하드웨어** | |
+| 메인 서버 | Dual Intel Xeon Gold 6138 (40C/80T), 128GB DDR4 ECC, ASUS 서버보드, 4U 산업용 케이스, Noctua 팬 전교체 |
+| 네트워크 (NIC) | Intel X520-DA2 10G SFP+ (서버, 게임PC) |
+| 네트워크 (스위치) | MikroTik CRS317-1G-16S+ (10G SFP+ x16 포트) |
+| 방화벽 (어플라이언스) | Check Point Quantum Security Gateway 3100 |
+| **네트워크/보안** | |
+| WAN | SK브로드밴드 고정 공인IP x2, AS17613 |
+| LAN | 10Gbps SFP+ 백본 (DAC/광모듈) |
+| 경계 보안 | Check Point IPS, Anti-Bot, SandBlast Threat Prevention, URL Filtering |
+| 호스트 보안 | SELinux Enforcing, firewalld, ISMS-P 보안 헤더 |
+| TLS 인증서 | Let's Encrypt (certbot + Stalwart 내장 ACME) |
+| DNS | Windows Server DNS, Pi-Hole (내부), 공인 DNS (namgun.or.kr) |
+| **소프트웨어** | |
 | Identity Provider | Authentik 2025.10.4 |
 | 인증 프로토콜 | OIDC, LDAP, OAuth2 |
 | 포털 프론트엔드 | Nuxt 3, Vue 3, shadcn-vue |
 | 포털 백엔드 | FastAPI, SQLAlchemy 2.0 (async), asyncpg |
 | 리버스 프록시 | Nginx (Rocky Linux 10) |
-| TLS 인증서 | Let's Encrypt (certbot + ACME) |
 | IaC / 학습 | Terraform 1.9.8, LocalStack 3.8, boto3, cytoscape.js |
 | 컨테이너 (Docker) | Authentik, Portal (frontend + backend + nginx + PostgreSQL), Gitea, RustDesk Pro, Game Panel, LocalStack Lab |
 | 네이티브 서비스 (systemd) | Stalwart Mail v0.15.5, Authentik LDAP Outpost 2025.10.4 (192.168.0.250) |
-| 메일 서버 | Stalwart Mail Server (RocksDB) |
+| 메일 서버 | Stalwart Mail Server (RocksDB, JMAP, CalDAV/CardDAV) |
 | 화상회의 | BigBlueButton 3.0 |
 | 파일 스토리지 | NFS v4.1 (OMV, 192.168.0.100) |
 | Git 호스팅 | Gitea 1.25.4 |
-| DNS | Windows Server DNS, Pi-Hole |
-| 호스트 OS | Windows (WSL2), Rocky Linux 10, Rocky Linux 9.7 |
-| 가상화 | Hyper-V |
+| 호스트 OS | Windows Server (WSL2/Hyper-V), Rocky Linux 10, Rocky Linux 9.7 |
+| 가상화 | Hyper-V (BBB, Nginx, Mail 서버) |
 
 ---
 
@@ -1709,23 +1743,41 @@ location = /.well-known/carddav { return 301 /dav/; }
 
 ### 24.1 적용된 보안 정책
 
+**경계 보안 (Perimeter):**
+- Check Point Quantum 3100 Security Gateway
+  - IPS (침입 방지 시스템)
+  - Anti-Bot (봇넷 C&C 탐지/차단)
+  - SandBlast Threat Prevention (제로데이 위협 샌드박싱)
+  - URL Filtering (악성 URL 차단)
+
+**호스트 보안:**
+- SELinux Enforcing (메일서버, 2026-02-22 적용)
+- firewalld 방화벽 전 서버 활성화 (Phase 12)
+- 정기 OS 보안 패치 적용 (커널 5.14.0-611.30.1.el9_7)
+
+**애플리케이션 보안:**
 - ISMS-P 기준 보안 헤더 전 사이트 적용
 - TLS 1.2+ 강제 (HSTS preload)
 - 서버 정보 노출 차단 (`server_tokens off`, `X-Powered-By` / `Server` 헤더 제거)
 - 스캐너/봇 차단 규칙
+- CSP(Content-Security-Policy) 전 사이트 적용 (Phase 12)
+
+**인증/암호화:**
 - DKIM + SPF + DMARC 이메일 인증 체계
 - PKCE S256 인증 코드 보호 (replay 공격 방지)
 - 서명된 세션 쿠키 (itsdangerous, httponly, secure, samesite=lax)
 - 파일 시스템 path traversal 방지 (resolve + prefix 검증)
 - 리다이렉트 URL 도메인 화이트리스트 (`*.namgun.or.kr`)
-- CSP(Content-Security-Policy) 전 사이트 적용 (Phase 12)
-- firewalld 방화벽 전 서버 활성화 (Phase 12)
-- 정기 OS 보안 패치 적용 (Phase 12)
+
+**보안 아키텍처 (다층 방어):**
+```
+인터넷 → Check Point (IPS/Anti-Bot/SandBlast) → firewalld → SELinux → 앱 보안 헤더
+```
 
 ### 24.2 계획된 보안 강화
 
-- PTR 레코드 등록으로 역방향 DNS 검증 완성
-- Authentik MFA(다중 인증) 정책 강화
+- PTR 레코드 등록으로 역방향 DNS 검증 완성 (담주 SK 요청 예정)
+- Authentik MFA(다중 인증) 정책 강화 (v1.1 예정)
 - ~~메일서버 SELinux Enforcing 전환~~ → **완료** (2026-02-22, AVC 0건 확인 후 적용)
 
 ---

@@ -1,5 +1,7 @@
 FROM node:20-alpine AS build
 WORKDIR /app
+ARG NUXT_PUBLIC_DEMO_MODE
+ENV NUXT_PUBLIC_DEMO_MODE=${NUXT_PUBLIC_DEMO_MODE}
 COPY package.json package-lock.json* ./
 RUN [ -f package-lock.json ] && npm ci || npm install
 COPY . .

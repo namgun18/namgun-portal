@@ -1,0 +1,27 @@
+## ===========================================
+## namgun.or.kr Portal — Demo Site
+## ===========================================
+## demo.namgun.or.kr 전용. 프론트엔드만 구동, 백엔드 불필요.
+## NUXT_PUBLIC_DEMO_MODE=true로 mock 데이터 사용.
+##
+## 사용법:
+##   docker compose -f docker-compose.demo.yml up -d --build
+## ===========================================
+
+services:
+  demo-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NUXT_PUBLIC_DEMO_MODE: "true"
+    container_name: portal-demo
+    environment:
+      NUXT_PUBLIC_DEMO_MODE: "true"
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+
+networks:
+  default:
+    name: portal-demo-net

@@ -135,15 +135,32 @@ async def resolve_account_id(email: str) -> str | None:
 # ─── Generic JMAP call ───
 
 
-async def jmap_call(method_calls: list, account_id: str | None = None) -> dict:
+USING_MAIL = [
+    "urn:ietf:params:jmap:core",
+    "urn:ietf:params:jmap:mail",
+    "urn:ietf:params:jmap:submission",
+]
+
+USING_CALENDAR = [
+    "urn:ietf:params:jmap:core",
+    "urn:ietf:params:jmap:calendars",
+]
+
+USING_CONTACTS = [
+    "urn:ietf:params:jmap:core",
+    "urn:ietf:params:jmap:contacts",
+]
+
+
+async def jmap_call(
+    method_calls: list,
+    account_id: str | None = None,
+    using: list[str] | None = None,
+) -> dict:
     """POST /jmap with JMAP method calls."""
     client = _get_client()
     body = {
-        "using": [
-            "urn:ietf:params:jmap:core",
-            "urn:ietf:params:jmap:mail",
-            "urn:ietf:params:jmap:submission",
-        ],
+        "using": using or USING_MAIL,
         "methodCalls": method_calls,
     }
     resp = await client.post("/jmap", json=body)

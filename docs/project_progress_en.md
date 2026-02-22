@@ -17,6 +17,8 @@
 | v1.4 | 2026-02-22 | 남기완 | Added Phase 11 (Visual Refresh), Phase 12 (Infrastructure Security Hardening) |
 | v1.5 | 2026-02-22 | 남기완 | Added Phase 13 (LocalStack Lab — AWS IaC Learning Environment) |
 | v1.6 | 2026-02-22 | 남기완 | Added Phase 14 (UI Improvements & SSR Auth Fix) |
+| v1.7 | 2026-02-22 | 남기완 | Added Phase 15 (Calendar/Contacts + Demo Site) |
+| v1.8 | 2026-02-22 | 남기완 | Added v0.7.1 demo site bug fixes + Nginx cache header hardening |
 
 ---
 
@@ -29,7 +31,7 @@ The namgun.or.kr Integrated Portal is a self-hosted, unified platform designed f
 - Unified SSO authentication across all services (OIDC / LDAP)
 - Infrastructure aligned with ISMS-P security standards
 - Data sovereignty through self-hosting
-- Phased service rollout (Phase 0 through Phase 14)
+- Phased service rollout (Phase 0 through Phase 15)
 
 ---
 
@@ -53,6 +55,7 @@ The namgun.or.kr Integrated Portal is a self-hosted, unified platform designed f
 | Phase 12 | Infrastructure Security Hardening | **Complete** | — | Full-server vulnerability scan, CSP headers, firewalld activation, OS security patches, test page cleanup |
 | Phase 13 | LocalStack Lab — AWS IaC Learning Environment | **Complete** | — | Terraform IaC, per-user LocalStack containers, topology visualization, templates, CI/CD |
 | Phase 14 | UI Improvements & SSR Auth Fix | **Complete** | — | Lab left-right split with drag resize, mail compose popup with signature selection, SSR cookie forwarding, Nginx cache control (v0.6.1) |
+| Phase 15 | Calendar/Contacts + Demo Site | **Complete** | — | JMAP Calendar/Contacts, calendar sharing, CalDAV/CardDAV, demo.namgun.or.kr (v0.7.0 → v0.7.1) |
 
 ---
 
@@ -82,7 +85,8 @@ Internet
   │       ├─ Gitea 1.25.4                                        │
   │       ├─ RustDesk Pro (hbbs + hbbr)                          │
   │       ├─ Game Panel (backend + nginx + palworld)             │
-│       └─ LocalStack Lab (per-user dynamic containers, lab-net)│
+│       ├─ LocalStack Lab (per-user dynamic containers, lab-net)│
+  │       └─ Demo Frontend (Nuxt 3 SSR, :3001, demo mode)      │
   │                                                              │
   │  [192.168.0.100] OMV (OpenMediaVault) — NAS                 │
   │    └─ NFSv4 server (/export/root, fsid=0)                   │
@@ -1292,7 +1296,158 @@ Added a **row number column** to the mail list, displaying consistent numbering 
 
 ---
 
-## 20. Key Troubleshooting Summary
+## 20. Phase 15: Calendar/Contacts + Demo Site (Complete, v0.7.0 → v0.7.1)
+
+Leveraging Stalwart v0.15's native JMAP for Calendars (RFC 8984) and Contacts (RFC 9553) support, calendar and contact management features were implemented within the portal. A demo site was also deployed at demo.namgun.or.kr.
+
+### 20.1 Calendar (JMAP for Calendars)
+
+Calendar and event CRUD operations are implemented through the Stalwart JMAP API. JSCalendar (RFC 8984) `start` + `duration` format is bidirectionally converted to the frontend-friendly `start`/`end` format.
+
+| Feature | Description |
+|---------|-------------|
+| Calendar CRUD | Create/update/delete, color assignment, visibility toggle |
+| Event CRUD | Create/update/delete, all-day event support |
+| View modes | Monthly grid / weekly timesheet / daily timesheet switching |
+| Calendar sharing | JMAP `shareWith` property, per-user read/write permission control |
+| CalDAV sync | CalDAV URL guidance for external clients (Thunderbird, iOS, Android) |
+
+**API Endpoints (13):**
+```
+GET/POST           /api/calendar/calendars
+PATCH/DELETE        /api/calendar/calendars/{id}
+GET/POST/DELETE     /api/calendar/calendars/{id}/shares
+GET                 /api/calendar/events?start=&end=
+GET/POST            /api/calendar/events[/{id}]
+PATCH/DELETE        /api/calendar/events/{id}
+GET                 /api/calendar/sync-info
+```
+
+### 20.2 Contacts (JMAP for Contacts)
+
+JSContact (RFC 9553) format contact data is converted to a flat, frontend-friendly structure.
+
+| Feature | Description |
+|---------|-------------|
+| Address book CRUD | Create/delete, per-book filtering |
+| Contact CRUD | Create/update/delete, search, pagination |
+| Multiple fields | Multiple email/phone/address entries (categorized by type) |
+| CardDAV sync | CardDAV URL guidance for external clients |
+
+**API Endpoints (10):**
+```
+GET/POST/DELETE     /api/contacts/address-books[/{id}]
+GET/POST            /api/contacts/[{id}]
+PATCH/DELETE        /api/contacts/{id}
+GET                 /api/contacts/sync-info
+```
+
+### 20.3 CalDAV/CardDAV Reverse Proxy
+
+External Nginx (192.168.0.150) redirects `mail.namgun.or.kr` well-known URLs to Stalwart, enabling automatic discovery by desktop clients such as Thunderbird.
+
+```nginx
+location = /.well-known/caldav  { return 301 /dav/; }
+location = /.well-known/carddav { return 301 /dav/; }
+```
+
+### 20.4 Demo Site (demo.namgun.or.kr)
+
+The same Nuxt 3 frontend is deployed with `NUXT_PUBLIC_DEMO_MODE=true`, serving mock data without a backend to provide a UI experience demo.
+
+| Item | Description |
+|------|-------------|
+| Architecture | Nitro server middleware intercepts `/api/*` → returns mock data |
+| GET requests | Pre-defined mock data returned (mail, calendar, contacts, files, meetings, etc.) |
+| Write requests | 403 + "Changes are not allowed in demo mode" toast displayed |
+| Authentication | Auto-login (auth middleware bypass) |
+| Deployment | `docker-compose.demo.yml` (frontend only, port 3001) |
+| TLS | Let's Encrypt certificate (certbot webroot) |
+| DNS | Pi-Hole internal DNS + public DNS registration |
+| Crawling | `robots.txt Allow: /` (AI crawling permitted) |
+
+### 20.5 Frontend Changes
+
+| Item | Description |
+|------|-------------|
+| Login page | Added "Try Demo" button (link to demo.namgun.or.kr) |
+| Navigation | Added Calendar/Contacts menu links to header |
+| Dashboard | Added Calendar/Contacts to shortcut widget |
+| Profile | CalDAV/CardDAV sync URL display + copy button |
+
+### 20.6 Modified Files
+
+| # | File | Type |
+|---|------|------|
+| 1 | `backend/app/mail/jmap.py` | Modified (USING_CALENDAR/CONTACTS constants, using parameter) |
+| 2 | `backend/app/main.py` | Modified (calendar/contacts router registration, v0.7.0) |
+| 3–6 | `backend/app/calendar/{__init__, schemas, jmap_calendar, router}.py` | **New** (calendar JMAP wrapping + sharing + 13 endpoints) |
+| 7–10 | `backend/app/contacts/{__init__, schemas, jmap_contacts, router}.py` | **New** (contacts JMAP wrapping + 10 endpoints) |
+| 11 | `frontend/composables/useCalendar.ts` | **New** (calendar state management + sharing) |
+| 12–20 | `frontend/pages/calendar.vue` + `components/calendar/*.vue` (8) | **New** (calendar views + share modal) |
+| 21 | `frontend/composables/useContacts.ts` | **New** (contacts state management) |
+| 22–26 | `frontend/pages/contacts.vue` + `components/contacts/*.vue` (4) | **New** (contacts UI) |
+| 27–30 | `frontend/demo/mockData.ts`, `server/middleware/demo.ts`, `plugins/demo-toast.client.ts`, `docker-compose.demo.yml` | **New** (demo system) |
+| 31–36 | `nuxt.config.ts`, `auth.global.ts`, `AppHeader.vue`, `DashboardShortcuts.vue`, `profile.vue`, `login.vue` | Modified |
+
+### 20.7 v0.7.1 Bug Fixes and Stabilization
+
+Demo site quality issues, SSR hydration errors, and JMAP compatibility problems were resolved.
+
+**Demo site bug fixes:**
+
+| # | Problem | Fix |
+|---|---------|-----|
+| 1 | Mail detail returned identical body for all messages | `getMessageDetail(id)` generates unique HTML body per message |
+| 2 | Mailbox filtering not working (no inbox/sent/drafts/trash distinction) | `mailbox_id` query filtering, added sent/draft/trash messages |
+| 3 | File mock data mismatched `FileItem` interface | Complete rewrite with `file()`/`dir()` helpers, full interface compliance |
+| 4 | File tab navigation not working (My Files / Shared / All Users) | Per-root-path (`my`, `shared`, `users`) subdirectory mock data |
+| 5 | File download opened `undefined` page | Client: demo mode check + `alert()`; Server: `__DEMO_BLOCK__` → 403 |
+| 6 | No solo filter when clicking calendar name | `soloCalendar(id)` — click shows only that calendar, re-click restores all |
+
+**SSR hydration error root fix:**
+
+| # | Problem | Cause | Fix |
+|---|---------|-------|-----|
+| 7 | Dark mode toggle SVG icon mismatch | SSR falls back to `light` colorMode, client detects OS preference | `<ClientOnly>` wrapper + fallback placeholder |
+| 8 | Dashboard greeting timezone mismatch | Docker (UTC) vs browser (KST) `new Date()` difference | Initialize in `onMounted`, SSR renders generic greeting |
+| 9 | Calendar date mismatch | Module-level `new Date()` differs between server/client timezone | Wrapped entire calendar page in `<ClientOnly>` |
+
+**JMAP compatibility fixes:**
+
+| # | Problem | Cause | Fix |
+|---|---------|-------|-----|
+| 10 | Contacts list 500 error | Stalwart rejects `name/full` sort (`unsupportedSort`) | Removed `sort` parameter |
+| 11 | Contacts/Calendar 400 when no filter | Stalwart rejects `"filter": null` in JSON | Omit `filter` key when empty |
+
+**Nginx cache header hardening:**
+
+| # | Change | Description |
+|---|--------|-------------|
+| 12 | Internal Nginx `add_header ... always` | Cache headers applied to all response codes + `Pragma` |
+| 13 | External Nginx `map $uri` cache control | `/_nuxt/` → immutable, others → no-cache, `proxy_hide_header` for unified management |
+
+**Modified files:**
+
+| # | File | Change |
+|---|------|--------|
+| 1 | `frontend/demo/mockData.ts` | Per-message HTML, mailbox filter, file interface rewrite, download blocking |
+| 2 | `frontend/server/middleware/demo.ts` | Query parameter forwarding, `__DEMO_BLOCK__` handling |
+| 3 | `frontend/composables/useCalendar.ts` | Added `soloCalendar()` function |
+| 4 | `frontend/components/calendar/CalendarSidebar.vue` | Calendar name click handler |
+| 5 | `frontend/composables/useFiles.ts` | Demo mode download blocking |
+| 6 | `frontend/components/layout/AppHeader.vue` | colorMode `v-if` → `<ClientOnly>` wrapper |
+| 7 | `frontend/components/dashboard/DashboardGreeting.vue` | `new Date()` → `onMounted` initialization |
+| 8 | `frontend/pages/calendar.vue` | View area + sidebar `<ClientOnly>` wrapper |
+| 9 | `backend/app/contacts/jmap_contacts.py` | Removed `sort`, `filter: null` → key omission |
+| 10 | `backend/app/calendar/jmap_calendar.py` | `filter: null` → key omission |
+| 11 | `nginx/nginx.conf` | `add_header ... always` + `Pragma` |
+| 12 | `192.168.0.150:namgun.or.kr.conf` | `map $uri` cache control + `proxy_hide_header` |
+| 13 | `backend/app/main.py` | Version v0.7.0 → v0.7.1 |
+
+---
+
+## 21. Key Troubleshooting Summary
 
 | # | Problem | Cause | Resolution |
 | 23 | Git recent-commits response delay | Sequential fetching from 50 repos | Reduced to 5 repos + asyncio.gather parallel + 120s in-memory TTL cache |
@@ -1323,12 +1478,16 @@ Added a **row number column** to the mail list, displaying consistent numbering 
 | 22 | Gitea OAuth `redirect_uri` mismatch | `.env` missing `/callback` suffix | Registered full path `/user/oauth2/portal/callback` in `redirect_uris` |
 | 26 | Page refresh redirects to home in SSR | Nuxt 3 SSR `$fetch` does not automatically forward browser cookies → server judges as unauthenticated | Capture cookies with `useRequestHeaders(['cookie'])` and pass to `$fetch` headers |
 | 27 | SPA navigation completely broken after deploy | Browser cached old JS chunks from previous build → hydration failure → NuxtLink degrades to plain `<a>` tags | Applied Nginx `Cache-Control: no-cache` (HTML) + `immutable` (asset content-hash) + full browser cache clear |
+| 28 | Demo site mail detail returned same body for all messages | `getMockResponse()` ignored message ID in path, always returned static `demoMessageDetail` | Created `getMessageDetail(id)` to dynamically generate unique HTML body per message |
+| 29 | Demo site file download opened `undefined` page | `window.open(url)` displayed mock JSON from demo middleware | Client-side demo mode detection + `alert()` block; server-side `__DEMO_BLOCK__` → 403 |
+| 30 | Main server SSR hydration error (`nextSibling is null`) | `useColorMode()` `v-if` produced different SVG between SSR (light fallback) and client (OS detection); `new Date()` timezone difference between Docker (UTC) and browser (KST) caused DOM mismatch | colorMode → `<ClientOnly>`, DashboardGreeting → `onMounted` init, calendar → `<ClientOnly>` wrapper |
+| 31 | Contacts list 500 error | Stalwart rejects `ContactCard/query` `name/full` sort + `"filter": null` JSON parsing failure | Removed `sort`, omit `filter` key when empty |
 
 ---
 
-## 21. Remaining Tasks
+## 22. Remaining Tasks
 
-### 21.1 Immediate Action Required
+### 22.1 Immediate Action Required
 
 - [x] Confirm DKIM `dkim=pass` (after DNS cache expiry)
 - [ ] Register PTR record (SK Broadband, `211.244.144.69 → mail.namgun.or.kr`)
@@ -1337,7 +1496,7 @@ Added a **row number column** to the mail list, displaying consistent numbering 
 - [ ] Reboot Nginx/Mail servers for kernel update (security patches applied, new kernel pending load)
 - [ ] Transition mail server SELinux to Enforcing (verify services after reboot)
 
-### 21.2 Completed Items
+### 22.2 Completed Items
 
 | Item | Completed Phase |
 |------|----------------|
@@ -1389,20 +1548,31 @@ Added a **row number column** to the mail list, displaying consistent numbering 
 | Full viewport layout (container constraint removed) | Phase 14 |
 | SSR cookie forwarding fix (useRequestHeaders) | Phase 14 |
 | Nginx cache control headers | Phase 14 |
+| JMAP Calendar (month/week/day views, event CRUD) | Phase 15 |
+| JMAP Contacts (address books, search, CRUD) | Phase 15 |
+| Calendar sharing (shareWith permission control) | Phase 15 |
+| CalDAV/CardDAV Nginx proxy + well-known | Phase 15 |
+| Demo site (demo.namgun.or.kr) | Phase 15 |
+| Demo mock data (Nitro middleware) | Phase 15 |
+| Login page demo button | Phase 15 |
+| Demo per-message mail detail + mailbox filtering | Phase 15 (v0.7.1) |
+| Demo file tab distinction (My Files/Shared/All Users) + download blocking | Phase 15 (v0.7.1) |
+| Calendar name click solo filter | Phase 15 (v0.7.1) |
+| Nginx cache header `always` hardening + external `map $uri` cache control | Phase 15 (v0.7.1) |
+| SSR hydration error root fix (colorMode, Date timezone) | Phase 15 (v0.7.1) |
+| JMAP contacts `unsupportedSort` + `filter: null` fix | Phase 15 (v0.7.1) |
 
-### 21.3 Future Plans
+### 22.3 Future Plans
 
 | Item | Description | Expected Technology Stack |
 |------|-------------|--------------------------|
 | MFA Integration | Authentik MFA flow + portal UI challenge handling | Authentik Flow Executor + TOTP/WebAuthn |
 | Game Panel portal integration | Manage game servers directly within the portal (status query completed) | Portal API + Game Panel API integration |
-| CalDAV / CardDAV | Calendar/contacts synchronization | Stalwart built-in or separate server |
-| Demo site | Build public demo environment at demo.namgun.or.kr | Nuxt 3 + FastAPI (read-only mode) |
 | Naver Works-grade ERP | Groupware features such as organization management, approvals, and messaging | Long-term objective |
 
 ---
 
-## 22. Technology Stack Summary
+## 23. Technology Stack Summary
 
 | Category | Technology |
 |----------|------------|
@@ -1425,9 +1595,9 @@ Added a **row number column** to the mail list, displaying consistent numbering 
 
 ---
 
-## 23. Security Considerations
+## 24. Security Considerations
 
-### 23.1 Applied Security Policies
+### 24.1 Applied Security Policies
 
 - ISMS-P compliant security headers applied across all sites
 - TLS 1.2+ enforced (HSTS preload)
@@ -1442,7 +1612,7 @@ Added a **row number column** to the mail list, displaying consistent numbering 
 - firewalld firewall activated on all servers (Phase 12)
 - Regular OS security patch application (Phase 12)
 
-### 23.2 Planned Security Enhancements
+### 24.2 Planned Security Enhancements
 
 - Complete reverse DNS verification through PTR record registration
 - Strengthen Authentik MFA (multi-factor authentication) policies
@@ -1450,4 +1620,4 @@ Added a **row number column** to the mail list, displaying consistent numbering 
 
 ---
 
-*End of document. Last updated: 2026-02-22 (v1.6)*
+*End of document. Last updated: 2026-02-22 (v1.8)*

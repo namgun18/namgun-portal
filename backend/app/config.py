@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # File storage
     storage_root: str = "/storage"
-    upload_max_size_mb: int = 1024
+    upload_max_size_mb: int = 5120
 
     # Stalwart Mail (JMAP)
     stalwart_url: str = "http://192.168.0.250:8080"

@@ -1,15 +1,17 @@
 <script setup lang="ts">
 const { user } = useAuth()
 
-const now = ref(new Date())
+const now = ref<Date | null>(null)
 let timer: ReturnType<typeof setInterval>
 
 onMounted(() => {
+  now.value = new Date()
   timer = setInterval(() => { now.value = new Date() }, 60_000)
 })
 onUnmounted(() => clearInterval(timer))
 
 const greeting = computed(() => {
+  if (!now.value) return '안녕하세요'
   const h = now.value.getHours()
   if (h < 6) return '늦은 밤이에요'
   if (h < 12) return '좋은 아침이에요'
@@ -17,14 +19,15 @@ const greeting = computed(() => {
   return '좋은 저녁이에요'
 })
 
-const dateStr = computed(() =>
-  now.value.toLocaleDateString('ko-KR', {
+const dateStr = computed(() => {
+  if (!now.value) return ''
+  return now.value.toLocaleDateString('ko-KR', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
     weekday: 'long',
   })
-)
+})
 </script>
 
 <template>
@@ -38,7 +41,7 @@ const dateStr = computed(() =>
           오늘도 좋은 하루 되세요
         </p>
       </div>
-      <p class="text-sm text-blue-200 dark:text-muted-foreground shrink-0">
+      <p v-if="dateStr" class="text-sm text-blue-200 dark:text-muted-foreground shrink-0">
         {{ dateStr }}
       </p>
     </div>

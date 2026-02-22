@@ -46,7 +46,7 @@ Six independent services (Gitea, Game Panel, RustDesk, FileBrowser, BigBlueButto
 | Gitea | git.namgun.or.kr | OIDC native | External link | P1 |
 | RustDesk | remote.namgun.or.kr | OIDC (Pro) | External link | P1 |
 | BBB | meet.namgun.or.kr | OIDC (Greenlight 3.x) | External link | P2 |
-| Stalwart Mail | mail.namgun.or.kr | OIDC + LDAP | Native (JMAP) | P2 |
+| Stalwart Mail | mail.namgun.or.kr | OIDC + LDAP | Native (JMAP: mail/calendar/contacts) | P2 |
 | OMV/FileServer | file.namgun.or.kr | Proxy Auth | Native (WebDAV) | P2 |
 | Game Panel | game.namgun.or.kr | N/A (Discord OAuth2) | External link | - |
 
@@ -81,7 +81,7 @@ All external traffic enters through the Nginx reverse proxy as a single entry po
     │     └── /api/*     → FastAPI Gateway (internal)
     │           ├── /api/mail/*     → Stalwart JMAP
     │           ├── /api/files/*    → OMV WebDAV
-    │           ├── /api/calendar/* → Stalwart CalDAV
+    │           ├── /api/calendar/* → Stalwart JMAP (CalDAV)
     │           ├── /api/contacts/* → Stalwart CardDAV
     │           ├── /api/blog/*     → PostgreSQL
     │           └── /api/notify/*   → Unified notifications
@@ -91,6 +91,7 @@ All external traffic enters through the Nginx reverse proxy as a single entry po
     ├── remote.namgun.or.kr → RustDesk Pro
     ├── meet.namgun.or.kr   → BBB (Greenlight)
     ├── game.namgun.or.kr   → Game Panel
+    ├── demo.namgun.or.kr   → Demo (mock, frontend only)
     ├── dev.namgun.or.kr    → Test environment
     │
     └── mail.namgun.or.kr (:25/465/587/993)

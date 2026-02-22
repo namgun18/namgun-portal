@@ -139,5 +139,27 @@ async function handleSubmit() {
       </p>
     </form>
 
+    <!-- Demo button -->
+    <div class="relative">
+      <div class="absolute inset-0 flex items-center">
+        <span class="w-full border-t" />
+      </div>
+      <div class="relative flex justify-center text-xs uppercase">
+        <span class="bg-background px-2 text-muted-foreground">또는</span>
+      </div>
+    </div>
+
+    <a
+      href="https://demo.namgun.or.kr"
+      class="flex items-center justify-center gap-2 w-full py-3 px-4 text-sm font-medium rounded-lg border-2 border-dashed border-primary/40 text-primary hover:bg-primary/5 hover:border-primary/60 transition-colors"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">
+        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+      데모 체험하기
+      <span class="text-xs text-muted-foreground font-normal">(로그인 불필요)</span>
+    </a>
+
   </div>
 </template>

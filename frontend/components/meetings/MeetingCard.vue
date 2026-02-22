@@ -12,6 +12,8 @@ const emit = defineEmits<{
   select: [meetingId: string]
 }>()
 
+const copied = ref(false)
+
 const createdAt = computed(() => {
   if (!props.meeting.createTime || props.meeting.createTime === '0') return ''
   try {
@@ -20,6 +22,21 @@ const createdAt = computed(() => {
     return ''
   }
 })
+
+async function copyInviteLink() {
+  try {
+    const resp = await $fetch<{ short_url: string }>(`/api/meetings/${props.meeting.meetingID}/invite`)
+    await navigator.clipboard.writeText(resp.short_url)
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 2000)
+  } catch {
+    // Fallback: use full join URL
+    const url = `${window.location.origin}/join/${props.meeting.meetingID}`
+    await navigator.clipboard.writeText(url)
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 2000)
+  }
+}
 </script>
 
 <template>
@@ -67,6 +84,19 @@ const createdAt = computed(() => {
           <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" />
         </svg>
         참가
+      </button>
+      <button
+        @click.stop="copyInviteLink"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors"
+        :class="copied ? 'border-green-500 text-green-600 bg-green-50 dark:bg-green-900/20' : 'hover:bg-accent'"
+      >
+        <svg v-if="!copied" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+        <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+        {{ copied ? '복사됨' : '초대링크' }}
       </button>
       <button
         v-if="isAdmin && meeting.running"

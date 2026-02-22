@@ -1,6 +1,10 @@
 """BBB meetings API router."""
 
+import hashlib
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import RedirectResponse
 
 from app.auth.deps import get_current_user
 from app.db.models import User
@@ -8,11 +12,28 @@ from app.meetings import bbb
 from app.meetings.schemas import (
     Attendee,
     CreateMeetingRequest,
+    GuestJoinRequest,
+    InviteLinkResponse,
     JoinMeetingResponse,
     Meeting,
     MeetingDetail,
     Recording,
 )
+
+# In-memory short code → meeting_id mapping
+_short_codes: dict[str, str] = {}
+_meeting_codes: dict[str, str] = {}  # meeting_id → short_code
+
+
+def _get_short_code(meeting_id: str) -> str:
+    """Get or create a 6-char short code for a meeting."""
+    if meeting_id in _meeting_codes:
+        return _meeting_codes[meeting_id]
+    raw = hashlib.sha256(f"{meeting_id}{time.time()}".encode()).hexdigest()
+    code = raw[:6]
+    _short_codes[code] = meeting_id
+    _meeting_codes[meeting_id] = code
+    return code
 
 router = APIRouter(prefix="/api/meetings", tags=["meetings"])
 
@@ -168,6 +189,40 @@ async def join_meeting(
     )
     if not url:
         raise HTTPException(status_code=404, detail="Meeting not found")
+    return JoinMeetingResponse(joinUrl=url)
+
+
+@router.get("/{meeting_id}/invite", response_model=InviteLinkResponse)
+async def get_invite_link(
+    meeting_id: str,
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    """Generate invite link with short URL for a meeting."""
+    origin = f"{request.url.scheme}://{request.headers.get('host', request.url.hostname)}"
+    code = _get_short_code(meeting_id)
+    return InviteLinkResponse(
+        invite_url=f"{origin}/join/{meeting_id}",
+        short_url=f"{origin}/m/{code}",
+    )
+
+
+@router.post("/{meeting_id}/guest-join", response_model=JoinMeetingResponse)
+async def guest_join_meeting(
+    meeting_id: str,
+    body: GuestJoinRequest,
+    request: Request,
+):
+    """Get join URL for a guest (no auth required)."""
+    if not body.name.strip():
+        raise HTTPException(status_code=400, detail="이름을 입력해주세요.")
+    origin = f"{request.url.scheme}://{request.headers.get('host', request.url.hostname)}"
+    logout_url = f"{origin}/meeting-closed"
+    url = await bbb.get_join_url(
+        meeting_id, body.name.strip(), role="VIEWER", logout_url=logout_url
+    )
+    if not url:
+        raise HTTPException(status_code=404, detail="회의를 찾을 수 없습니다.")
     return JoinMeetingResponse(joinUrl=url)
 
 

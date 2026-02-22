@@ -2,6 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 
 from app.config import get_settings
 from app.db.session import init_db
@@ -16,6 +17,8 @@ from app.admin.router import router as admin_router
 from app.git.router import router as git_router
 from app.dashboard.router import router as dashboard_router
 from app.lab.router import router as lab_router
+from app.calendar.router import router as calendar_router
+from app.contacts.router import router as contacts_router
 
 settings = get_settings()
 _health_task = None
@@ -41,7 +44,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.5.1",
+    version="0.7.1",
     lifespan=lifespan,
     docs_url="/api/docs" if settings.debug else None,
     redoc_url=None,
@@ -57,8 +60,20 @@ app.include_router(admin_router)
 app.include_router(git_router)
 app.include_router(dashboard_router)
 app.include_router(lab_router)
+app.include_router(calendar_router)
+app.include_router(contacts_router)
 
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "service": settings.app_name, "version": "0.5.1"}
+    return {"status": "ok", "service": settings.app_name, "version": "0.7.1"}
+
+
+@app.get("/m/{code}")
+async def short_url_redirect(code: str):
+    """Redirect short meeting invite code to guest join page."""
+    from app.meetings.router import _short_codes
+    meeting_id = _short_codes.get(code)
+    if not meeting_id:
+        return RedirectResponse("/")
+    return RedirectResponse(f"/join/{meeting_id}")

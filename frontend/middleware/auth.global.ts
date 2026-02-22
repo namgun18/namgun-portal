@@ -1,9 +1,14 @@
 export default defineNuxtRouteMiddleware((to) => {
+  // Demo mode: skip auth entirely
+  const config = useRuntimeConfig()
+  if (config.public.demoMode) return
+
   const { user, loading } = useAuth()
 
   // Allow public pages
   const publicPages = ['/login', '/callback', '/register', '/forgot-password']
   if (publicPages.includes(to.path)) return
+  if (to.path.startsWith('/join/')) return
 
   // If not loading and no user, redirect to login
   if (!loading.value && !user.value) {

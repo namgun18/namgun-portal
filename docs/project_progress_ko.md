@@ -17,6 +17,9 @@
 | v1.4 | 2026-02-22 | 남기완 | Phase 11(비주얼 리프레시), Phase 12(인프라 보안 강화) 추가 |
 | v1.5 | 2026-02-22 | 남기완 | Phase 13(LocalStack Lab — AWS IaC 학습 환경) 추가 |
 | v1.6 | 2026-02-22 | 남기완 | Phase 14(UI 개선 및 SSR 인증 수정) 추가 |
+| v1.7 | 2026-02-22 | 남기완 | Phase 15 (캘린더/연락처 + 데모 사이트) 추가 |
+| v1.8 | 2026-02-22 | 남기완 | v0.7.1 데모 사이트 버그 수정 + Nginx 캐시 헤더 강화 추가 |
+| v1.9 | 2026-02-22 | 남기완 | Stalwart + LDAP Outpost 네이티브 마이그레이션 (Podman → systemd) |
 
 ---
 
@@ -29,7 +32,7 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 - 모든 서비스에 대한 SSO 인증 통합 (OIDC / LDAP)
 - ISMS-P 보안 기준에 준하는 인프라 구성
 - 셀프 호스팅 기반의 데이터 주권 확보
-- 단계적 서비스 확장 (Phase 0 ~ Phase 14)
+- 단계적 서비스 확장 (Phase 0 ~ Phase 15)
 
 ---
 
@@ -53,6 +56,7 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 | Phase 12 | 인프라 보안 강화 | **완료** | — | 전서버 취약점 스캔, CSP 헤더, firewalld 활성화, OS 보안 패치, test 페이지 정리 |
 | Phase 13 | LocalStack Lab — AWS IaC 학습 환경 | **완료** | — | Terraform IaC, 사용자별 LocalStack 컨테이너, 토폴로지 시각화, 템플릿, CI/CD |
 | Phase 14 | UI 개선 및 SSR 인증 수정 | **완료** | — | Lab 좌우 분할·리사이즈, 메일 팝업 작성·서명 선택, SSR 쿠키 전달, Nginx 캐시 제어 (v0.6.1) |
+| Phase 15 | 캘린더/연락처 + 데모 사이트 | **완료** | — | JMAP 캘린더/연락처, 캘린더 공유, CalDAV/CardDAV, demo.namgun.or.kr (v0.7.0 → v0.7.1) |
 
 ---
 
@@ -83,6 +87,7 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
   │       ├─ RustDesk Pro (hbbs + hbbr)                            │
   │       ├─ Game Panel (backend + nginx + palworld)               │
 │       └─ LocalStack Lab (사용자별 동적 컨테이너, lab-net)       │
+  │       ├─ Demo Frontend (Nuxt 3 SSR, :3001, demo mode)      │
   │                                                                │
   │  [192.168.0.100] OMV (OpenMediaVault) — NAS                   │
   │    └─ NFSv4 서버 (/export/root, fsid=0)                        │
@@ -1358,7 +1363,184 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 
 ---
 
-## 20. 핵심 트러블슈팅 정리
+## 20. Phase 15: 캘린더/연락처 + 데모 사이트 (완료, v0.7.0 → v0.7.1)
+
+Stalwart v0.15의 JMAP for Calendars(RFC 8984) + Contacts(RFC 9553) 지원을 활용하여 포털 내 캘린더 및 연락처 기능을 구현하고, demo.namgun.or.kr에 형상 데모 사이트를 배포하였다.
+
+### 20.1 캘린더 (JMAP for Calendars)
+
+Stalwart JMAP API를 통해 캘린더 및 일정 CRUD를 구현하였다. JSCalendar(RFC 8984)의 `start` + `duration` 형식을 프론트엔드 친화적인 `start`/`end` 형식으로 양방향 변환한다.
+
+| 기능 | 설명 |
+|------|------|
+| 캘린더 CRUD | 생성/수정/삭제, 색상 지정, 가시성 토글 |
+| 일정 CRUD | 생성/수정/삭제, 종일 이벤트 지원 |
+| 뷰 모드 | 월간 그리드 / 주간 시간표 / 일간 시간표 전환 |
+| 캘린더 공유 | JMAP `shareWith` 속성 활용, 사용자별 읽기/쓰기 권한 제어 |
+| CalDAV 동기화 | 외부 클라이언트(Thunderbird, iOS, Android)용 CalDAV URL 안내 |
+
+**API 엔드포인트 (13개):**
+```
+GET/POST           /api/calendar/calendars
+PATCH/DELETE        /api/calendar/calendars/{id}
+GET/POST/DELETE     /api/calendar/calendars/{id}/shares
+GET                 /api/calendar/events?start=&end=
+GET/POST            /api/calendar/events[/{id}]
+PATCH/DELETE        /api/calendar/events/{id}
+GET                 /api/calendar/sync-info
+```
+
+### 20.2 연락처 (JMAP for Contacts)
+
+JSContact(RFC 9553) 형식의 연락처 데이터를 프론트엔드 친화적인 플랫 구조로 변환하여 제공한다.
+
+| 기능 | 설명 |
+|------|------|
+| 주소록 CRUD | 생성/삭제, 주소록별 필터링 |
+| 연락처 CRUD | 생성/수정/삭제, 검색, 페이지네이션 |
+| 다중 필드 | 이메일/전화/주소 복수 입력 (타입별 분류) |
+| CardDAV 동기화 | 외부 클라이언트용 CardDAV URL 안내 |
+
+**API 엔드포인트 (10개):**
+```
+GET/POST/DELETE     /api/contacts/address-books[/{id}]
+GET/POST            /api/contacts/[{id}]
+PATCH/DELETE        /api/contacts/{id}
+GET                 /api/contacts/sync-info
+```
+
+### 20.3 CalDAV/CardDAV 리버스 프록시
+
+외부 Nginx(192.168.0.150)에서 `mail.namgun.or.kr`의 well-known URL을 Stalwart로 리다이렉트하여, Thunderbird 등 데스크톱 클라이언트에서 자동 검색이 가능하도록 구성하였다.
+
+```nginx
+location = /.well-known/caldav  { return 301 /dav/; }
+location = /.well-known/carddav { return 301 /dav/; }
+```
+
+### 20.4 데모 사이트 (demo.namgun.or.kr)
+
+같은 Nuxt 3 프론트엔드에 `NUXT_PUBLIC_DEMO_MODE=true` 환경변수를 적용하여, 백엔드 없이 mock 데이터로 UI를 체험할 수 있는 데모 사이트를 구성하였다.
+
+| 항목 | 설명 |
+|------|------|
+| 아키텍처 | Nitro 서버 미들웨어에서 `/api/*` 인터셉트 → mock 데이터 반환 |
+| GET 요청 | 사전 정의된 mock 데이터 반환 (메일, 캘린더, 연락처, 파일, 회의 등) |
+| 쓰기 요청 | 403 + "데모 모드에서는 변경할 수 없습니다" 토스트 표시 |
+| 인증 | 자동 로그인 (인증 미들웨어 바이패스) |
+| 배포 | `docker-compose.demo.yml` (프론트엔드만, 포트 3001) |
+| TLS | Let's Encrypt 정식 인증서 (certbot webroot) |
+| DNS | Pi-Hole 내부 DNS + 공인 DNS 등록 |
+| 크롤링 | `robots.txt Allow: /` (AI 크롤링 허용) |
+
+### 20.5 프론트엔드 변경
+
+| 항목 | 설명 |
+|------|------|
+| 로그인 페이지 | "데모 체험하기" 버튼 추가 (demo.namgun.or.kr 링크) |
+| 네비게이션 | 헤더에 캘린더/연락처 메뉴 링크 추가 |
+| 대시보드 | 바로가기 위젯에 캘린더/연락처 추가 |
+| 프로필 | CalDAV/CardDAV 동기화 URL 표시 + 복사 버튼 |
+
+### 20.6 수정 파일 목록
+
+| # | 파일 | 구분 |
+|---|------|------|
+| 1 | `backend/app/mail/jmap.py` | 수정 (USING_CALENDAR/CONTACTS 상수, using 파라미터) |
+| 2 | `backend/app/main.py` | 수정 (calendar/contacts 라우터 등록, v0.7.0) |
+| 3 | `backend/app/calendar/__init__.py` | **신규** |
+| 4 | `backend/app/calendar/schemas.py` | **신규** (캘린더/일정/공유 스키마) |
+| 5 | `backend/app/calendar/jmap_calendar.py` | **신규** (JMAP 캘린더 API 래핑, 공유 포함) |
+| 6 | `backend/app/calendar/router.py` | **신규** (13개 엔드포인트) |
+| 7 | `backend/app/contacts/__init__.py` | **신규** |
+| 8 | `backend/app/contacts/schemas.py` | **신규** (주소록/연락처 스키마) |
+| 9 | `backend/app/contacts/jmap_contacts.py` | **신규** (JMAP 연락처 API 래핑) |
+| 10 | `backend/app/contacts/router.py` | **신규** (10개 엔드포인트) |
+| 11 | `frontend/composables/useCalendar.ts` | **신규** (캘린더 상태 관리 + 공유) |
+| 12 | `frontend/pages/calendar.vue` | **신규** (캘린더 메인 페이지) |
+| 13 | `frontend/components/calendar/CalendarMiniMonth.vue` | **신규** |
+| 14 | `frontend/components/calendar/CalendarSidebar.vue` | **신규** |
+| 15 | `frontend/components/calendar/CalendarMonthView.vue` | **신규** |
+| 16 | `frontend/components/calendar/CalendarWeekView.vue` | **신규** |
+| 17 | `frontend/components/calendar/CalendarDayView.vue` | **신규** |
+| 18 | `frontend/components/calendar/CalendarEventChip.vue` | **신규** |
+| 19 | `frontend/components/calendar/CalendarEventModal.vue` | **신규** |
+| 20 | `frontend/components/calendar/CalendarShareModal.vue` | **신규** (캘린더 공유 모달) |
+| 21 | `frontend/composables/useContacts.ts` | **신규** (연락처 상태 관리) |
+| 22 | `frontend/pages/contacts.vue` | **신규** (연락처 메인 페이지) |
+| 23 | `frontend/components/contacts/ContactsSidebar.vue` | **신규** |
+| 24 | `frontend/components/contacts/ContactsList.vue` | **신규** |
+| 25 | `frontend/components/contacts/ContactsDetail.vue` | **신규** |
+| 26 | `frontend/components/contacts/ContactsEditModal.vue` | **신규** |
+| 27 | `frontend/demo/mockData.ts` | **신규** (전체 mock 데이터) |
+| 28 | `frontend/server/middleware/demo.ts` | **신규** (Nitro API 인터셉트) |
+| 29 | `frontend/plugins/demo-toast.client.ts` | **신규** (데모 403 토스트) |
+| 30 | `docker-compose.demo.yml` | **신규** (데모 전용 Compose) |
+| 31 | `frontend/nuxt.config.ts` | 수정 (demoMode 설정) |
+| 32 | `frontend/middleware/auth.global.ts` | 수정 (데모 바이패스) |
+| 33 | `frontend/components/layout/AppHeader.vue` | 수정 (네비 링크 추가) |
+| 34 | `frontend/components/dashboard/DashboardShortcuts.vue` | 수정 (바로가기 추가) |
+| 35 | `frontend/pages/profile.vue` | 수정 (동기화 설정 섹션) |
+| 36 | `frontend/pages/login.vue` | 수정 (데모 버튼) |
+
+### 20.7 v0.7.1 버그 수정 및 안정화
+
+데모 사이트 품질 이슈, SSR 하이드레이션 오류, JMAP 호환성 문제를 수정하였다.
+
+**데모 사이트 버그 수정:**
+
+| # | 문제 | 수정 내용 |
+|---|------|----------|
+| 1 | 메일 상세 보기에서 모든 메시지가 동일한 본문 반환 | `getMessageDetail(id)` 함수로 메시지별 고유 HTML 본문 생성 |
+| 2 | 메일함 필터링 미동작 (받은편지함/보낸편지함/임시보관/휴지통 구분 없음) | `mailbox_id` 쿼리 파라미터로 메시지 필터링, 보낸 메일 3건 + 임시보관 1건 + 휴지통 2건 추가 |
+| 3 | 파일 mock 데이터가 `FileItem` 인터페이스와 불일치 | `file()`/`dir()` 헬퍼 함수로 전면 재작성, 인터페이스 완전 일치 |
+| 4 | 파일 탭 구분 미동작 (내 파일/공유 파일/전체 사용자) | `my`, `shared`, `users` 루트 경로별 하위 디렉토리 mock 데이터 추가 |
+| 5 | 파일 다운로드 시 `undefined` 페이지 열림 | 클라이언트: 데모 모드 체크 후 `alert()`, 서버: `__DEMO_BLOCK__` → 403 |
+| 6 | 캘린더 이름 클릭 시 단독 필터 기능 없음 | `soloCalendar(id)` 함수 추가 — 클릭 시 해당 캘린더만 표시 |
+
+**SSR 하이드레이션 오류 근본 해결:**
+
+| # | 문제 | 원인 | 수정 내용 |
+|---|------|------|----------|
+| 7 | 다크 모드 토글 SVG 아이콘 불일치 | SSR은 `colorMode` light 폴백, 클라이언트는 OS 설정 감지 | `<ClientOnly>` 래퍼 + fallback placeholder |
+| 8 | 대시보드 인사말 시간대 불일치 | Docker(UTC) vs 브라우저(KST)의 `new Date()` 차이 | `onMounted`에서 초기화, SSR은 "안녕하세요" 렌더링 |
+| 9 | 캘린더 전체 날짜 불일치 | 모듈 레벨 `new Date()`가 서버/클라이언트 시간대 차이 | 캘린더 페이지 전체를 `<ClientOnly>` 래퍼 |
+
+**JMAP 호환성 수정:**
+
+| # | 문제 | 원인 | 수정 내용 |
+|---|------|------|----------|
+| 10 | 연락처 목록 500 에러 | Stalwart가 `name/full` 정렬 미지원 (`unsupportedSort`) | `sort` 파라미터 제거 |
+| 11 | 연락처/캘린더 필터 없을 때 400 에러 | Stalwart가 `"filter": null` JSON 파싱 거부 | 빈 필터 시 `filter` 키 자체 생략 |
+
+**Nginx 캐시 헤더 강화:**
+
+| # | 변경 | 설명 |
+|---|------|------|
+| 12 | 내부 Nginx `add_header ... always` | 모든 응답 코드에 캐시 헤더 적용 + `Pragma` 추가 |
+| 13 | 외부 Nginx `map $uri` 기반 캐시 제어 | `/_nuxt/` → immutable, 나머지 → no-cache, `proxy_hide_header`로 업스트림 헤더 통합 관리 |
+
+**수정 파일:**
+
+| # | 파일 | 변경 |
+|---|------|------|
+| 1 | `frontend/demo/mockData.ts` | 메시지별 HTML, 메일함 필터, 파일 인터페이스 재작성, 다운로드 차단 |
+| 2 | `frontend/server/middleware/demo.ts` | 쿼리 파라미터 전달, `__DEMO_BLOCK__` 처리 |
+| 3 | `frontend/composables/useCalendar.ts` | `soloCalendar()` 함수 추가 |
+| 4 | `frontend/components/calendar/CalendarSidebar.vue` | 캘린더 이름 클릭 핸들러 추가 |
+| 5 | `frontend/composables/useFiles.ts` | 데모 모드 다운로드 차단 |
+| 6 | `frontend/components/layout/AppHeader.vue` | colorMode `v-if` → `<ClientOnly>` 래퍼 |
+| 7 | `frontend/components/dashboard/DashboardGreeting.vue` | `new Date()` → `onMounted` 초기화 |
+| 8 | `frontend/pages/calendar.vue` | 뷰 영역 + 사이드바 `<ClientOnly>` 래퍼 |
+| 9 | `backend/app/contacts/jmap_contacts.py` | `sort` 제거, `filter: null` → 키 생략 |
+| 10 | `backend/app/calendar/jmap_calendar.py` | `filter: null` → 키 생략 |
+| 11 | `nginx/nginx.conf` | `add_header ... always` + `Pragma` |
+| 12 | `192.168.0.150:namgun.or.kr.conf` | `map $uri` 캐시 제어 + `proxy_hide_header` |
+| 13 | `backend/app/main.py` | 버전 v0.7.0 → v0.7.1 |
+
+---
+
+## 21. 핵심 트러블슈팅 정리
 
 | # | 문제 | 원인 | 해결 방법 |
 | 23 | Git recent-commits 응답 지연 | 50개 저장소를 순차 조회 | 5개로 축소 + asyncio.gather 병렬 + 120초 인메모리 TTL 캐시 |
@@ -1389,12 +1571,16 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 | 22 | Gitea OAuth `redirect_uri` 불일치 | `.env`에 `/callback` 누락 | `redirect_uris`에 `/user/oauth2/portal/callback` 전체 경로 등록 |
 | 26 | SSR에서 페이지 새로고침 시 홈으로 리다이렉트 | Nuxt 3 SSR `$fetch`가 브라우저 쿠키를 자동 전달하지 않음 → 서버에서 미인증 판정 | `useRequestHeaders(['cookie'])`로 쿠키 캡처 후 `$fetch` 헤더에 전달 |
 | 27 | 배포 후 SPA 네비게이션 완전 불능 | 브라우저가 이전 빌드의 JS 청크를 캐시 → 하이드레이션 실패 → NuxtLink가 `<a>` 태그로 퇴화 | Nginx `Cache-Control: no-cache` (HTML) + `immutable` (에셋 content-hash) 적용 + 브라우저 캐시 전체 삭제 |
+| 28 | 데모 사이트 메일 상세가 모든 메시지에 동일 본문 반환 | `getMockResponse()`가 경로의 메시지 ID를 무시하고 정적 `demoMessageDetail` 반환 | `getMessageDetail(id)` 함수로 메시지별 고유 HTML 본문 동적 생성 |
+| 29 | 데모 사이트 파일 다운로드 시 `undefined` 페이지 열림 | `window.open(url)`이 데모 미들웨어의 mock JSON을 표시 | 클라이언트에서 데모 모드 감지 후 `alert()` 차단 + 서버에서 `__DEMO_BLOCK__` → 403 반환 |
+| 30 | 본서버 SSR 하이드레이션 오류 (`nextSibling is null`) | `useColorMode()` `v-if`가 SSR(light 폴백)/클라이언트(OS 감지) 간 SVG 아이콘 불일치; `new Date()`가 Docker(UTC)/브라우저(KST) 시간대 차이로 DOM 불일치 | colorMode → `<ClientOnly>`, DashboardGreeting → `onMounted` 초기화, 캘린더 → `<ClientOnly>` 래퍼 |
+| 31 | 연락처 목록 500 에러 | Stalwart가 `ContactCard/query`의 `name/full` 정렬 미지원 + `"filter": null` JSON 파싱 거부 | `sort` 제거, 빈 필터 시 `filter` 키 생략 |
 
 ---
 
-## 21. 잔여 작업 항목
+## 22. 잔여 작업 항목
 
-### 21.1 즉시 조치 필요
+### 22.1 즉시 조치 필요
 
 - [x] DKIM `dkim=pass` 확인 (DNS 캐시 만료 후)
 - [ ] PTR 레코드 등록 (SK 브로드밴드, `211.244.144.69 → mail.namgun.or.kr`)
@@ -1403,7 +1589,7 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 - [ ] Nginx/Mail 서버 커널 재부팅 (보안 패치 적용 완료, 신규 커널 로드 필요)
 - [ ] 메일서버 SELinux Enforcing 전환 (재부팅 후 서비스 정상 확인 필요)
 
-### 21.2 완료된 항목
+### 22.2 완료된 항목
 
 | 항목 | 완료 단계 |
 |------|----------|
@@ -1455,20 +1641,45 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 | 전체 뷰포트 레이아웃 (컨테이너 제약 제거) | Phase 14 |
 | SSR 쿠키 전달 수정 (useRequestHeaders) | Phase 14 |
 | Nginx 캐시 제어 헤더 | Phase 14 |
+| JMAP 캘린더 (월/주/일 뷰, 일정 CRUD) | Phase 15 |
+| JMAP 연락처 (주소록, 검색, CRUD) | Phase 15 |
+| 캘린더 공유 (shareWith 권한 제어) | Phase 15 |
+| CalDAV/CardDAV Nginx 프록시 + well-known | Phase 15 |
+| 데모 사이트 (demo.namgun.or.kr) | Phase 15 |
+| 데모 mock 데이터 (Nitro 미들웨어) | Phase 15 |
+| 로그인 페이지 데모 버튼 | Phase 15 |
+| 데모 메일 메시지별 상세 + 메일함 필터링 | Phase 15 (v0.7.1) |
+| 데모 파일 탭 구분 (내 파일/공유/전체 사용자) + 다운로드 차단 | Phase 15 (v0.7.1) |
+| 캘린더 이름 클릭 단독 필터 | Phase 15 (v0.7.1) |
+| Nginx 캐시 헤더 `always` 강화 + 외부 `map $uri` 캐시 제어 | Phase 15 (v0.7.1) |
+| SSR 하이드레이션 오류 근본 해결 (colorMode, Date 시간대) | Phase 15 (v0.7.1) |
+| JMAP 연락처 `unsupportedSort` + `filter: null` 수정 | Phase 15 (v0.7.1) |
 
-### 21.3 향후 계획
+### 22.3 인프라 변경: Stalwart + LDAP Outpost 네이티브 마이그레이션 (2026-02-22)
+
+192.168.0.250 (Rocky Linux 9.7) 에서 운영 중이던 Stalwart Mail + Authentik LDAP Outpost를 Podman rootless 컨테이너에서 네이티브 systemd 서비스로 전환하였다.
+
+**전환 사유**: `conmon` 프로세스 사망으로 인한 반복적 장애 (WSL 재시작마다 비정상 종료 + 포트 바인딩 실패)
+
+| 구성 요소 | 이전 (Podman) | 이후 (네이티브) |
+|-----------|---------------|----------------|
+| Stalwart Mail v0.15.5 | Podman rootless 컨테이너 | `/usr/local/bin/stalwart-mail` + `stalwart-mail.service` |
+| Authentik LDAP Outpost | Podman rootless 컨테이너 (2025.10) | `/usr/local/bin/authentik-ldap-outpost` (2025.10.4) + `authentik-ldap-outpost.service` |
+| 데이터 경로 | `~/.local/share/containers/storage/volumes/stalwart-data/` | `/opt/stalwart-mail/` |
+| 자동 시작 | Podman 의존 (불안정) | systemd enable (안정) |
+| Watchdog | `podman restart` | `sudo systemctl restart` |
+
+### 22.4 향후 계획
 
 | 항목 | 내용 | 예상 기술 스택 |
 |------|------|---------------|
 | MFA 추가 | Authentik MFA 플로우 연동 + 포털 UI에서 challenge 처리 | Authentik Flow Executor + TOTP/WebAuthn |
 | Game Panel 포털 통합 | 게임 서버 관리를 포털 내에서 직접 수행 (현재 상태 조회만 완료) | 포털 API + Game Panel API 연동 |
-| CalDAV / CardDAV | 캘린더/연락처 동기화 | Stalwart 내장 또는 별도 서버 |
-| 데모 사이트 | demo.namgun.or.kr 공개 데모 환경 구축 | Nuxt 3 + FastAPI (읽기 전용 모드) |
 | Naver Works급 ERP | 조직 관리, 결재, 메신저 등 그룹웨어 기능 | 장기 목표 |
 
 ---
 
-## 22. 기술 스택 요약
+## 23. 기술 스택 요약
 
 | 분류 | 기술 |
 |------|------|
@@ -1480,7 +1691,7 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 | TLS 인증서 | Let's Encrypt (certbot + ACME) |
 | IaC / 학습 | Terraform 1.9.8, LocalStack 3.8, boto3, cytoscape.js |
 | 컨테이너 (Docker) | Authentik, Portal (frontend + backend + nginx + PostgreSQL), Gitea, RustDesk Pro, Game Panel, LocalStack Lab |
-| 컨테이너 (Podman) | Stalwart Mail, LDAP Outpost |
+| 네이티브 서비스 (systemd) | Stalwart Mail v0.15.5, Authentik LDAP Outpost 2025.10.4 (192.168.0.250) |
 | 메일 서버 | Stalwart Mail Server (RocksDB) |
 | 화상회의 | BigBlueButton 3.0 |
 | 파일 스토리지 | NFS v4.1 (OMV, 192.168.0.100) |
@@ -1491,9 +1702,9 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 
 ---
 
-## 23. 보안 고려사항
+## 24. 보안 고려사항
 
-### 23.1 적용된 보안 정책
+### 24.1 적용된 보안 정책
 
 - ISMS-P 기준 보안 헤더 전 사이트 적용
 - TLS 1.2+ 강제 (HSTS preload)
@@ -1508,7 +1719,7 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 - firewalld 방화벽 전 서버 활성화 (Phase 12)
 - 정기 OS 보안 패치 적용 (Phase 12)
 
-### 23.2 계획된 보안 강화
+### 24.2 계획된 보안 강화
 
 - PTR 레코드 등록으로 역방향 DNS 검증 완성
 - Authentik MFA(다중 인증) 정책 강화
@@ -1516,4 +1727,4 @@ Body: { "files": { "main.tf": "...", "network.tf": "..." } }
 
 ---
 
-*문서 끝. 최종 갱신: 2026-02-22 (v1.6)*
+*문서 끝. 최종 갱신: 2026-02-22 (v1.8)*

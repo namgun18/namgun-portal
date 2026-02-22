@@ -46,7 +46,7 @@ namgun.or.kr 도메인에서 운영 중인 6개 독립 서비스(Gitea, Game Pan
 | Gitea | git.namgun.or.kr | OIDC 네이티브 | 외부 링크 | P1 |
 | RustDesk | remote.namgun.or.kr | OIDC (Pro) | 외부 링크 | P1 |
 | BBB | meet.namgun.or.kr | OIDC (Greenlight 3.x) | 외부 링크 | P2 |
-| Stalwart Mail | mail.namgun.or.kr | OIDC + LDAP | 네이티브 (JMAP) | P2 |
+| Stalwart Mail | mail.namgun.or.kr | OIDC + LDAP | 네이티브 (JMAP: 메일/캘린더/연락처) | P2 |
 | OMV/FileServer | file.namgun.or.kr | Proxy Auth | 네이티브 (WebDAV) | P2 |
 | Game Panel | game.namgun.or.kr | N/A (Discord OAuth2) | 외부 링크 | - |
 
@@ -81,7 +81,7 @@ Authentik을 단일 크레덴셜 소스(Single Source of Truth)로 사용하며,
     │     └── /api/*     → FastAPI Gateway (내부)
     │           ├── /api/mail/*     → Stalwart JMAP
     │           ├── /api/files/*    → OMV WebDAV
-    │           ├── /api/calendar/* → Stalwart CalDAV
+    │           ├── /api/calendar/* → Stalwart JMAP (CalDAV)
     │           ├── /api/contacts/* → Stalwart CardDAV
     │           ├── /api/blog/*     → PostgreSQL
     │           └── /api/notify/*   → 통합 알림
@@ -91,6 +91,7 @@ Authentik을 단일 크레덴셜 소스(Single Source of Truth)로 사용하며,
     ├── remote.namgun.or.kr → RustDesk Pro
     ├── meet.namgun.or.kr   → BBB (Greenlight)
     ├── game.namgun.or.kr   → Game Panel
+    ├── demo.namgun.or.kr   → 데모 (mock, 프론트엔드만)
     ├── dev.namgun.or.kr    → 테스트 환경
     │
     └── mail.namgun.or.kr (:25/465/587/993)

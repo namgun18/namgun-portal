@@ -330,6 +330,55 @@ async function handlePasswordSubmit() {
         </div>
       </div>
 
+      <!-- Sync settings section -->
+      <div class="rounded-lg border bg-card p-6 space-y-4">
+        <h2 class="text-lg font-semibold">동기화 설정</h2>
+        <p class="text-sm text-muted-foreground">Thunderbird, iOS, Android 등 외부 클라이언트에서 동기화할 수 있습니다.</p>
+
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium mb-1">CalDAV (캘린더)</label>
+            <div class="flex items-center gap-2">
+              <input
+                :value="`https://mail.namgun.or.kr/dav/calendars/${user?.email || ''}/`"
+                readonly
+                class="flex-1 px-3 py-2 text-sm border rounded-lg bg-muted font-mono cursor-text"
+              />
+              <button
+                @click="navigator.clipboard.writeText(`https://mail.namgun.or.kr/dav/calendars/${user?.email || ''}/`)"
+                class="px-3 py-2 text-sm border rounded-lg hover:bg-accent transition-colors shrink-0"
+                title="복사"
+              >
+                복사
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium mb-1">CardDAV (연락처)</label>
+            <div class="flex items-center gap-2">
+              <input
+                :value="`https://mail.namgun.or.kr/dav/addressbooks/${user?.email || ''}/`"
+                readonly
+                class="flex-1 px-3 py-2 text-sm border rounded-lg bg-muted font-mono cursor-text"
+              />
+              <button
+                @click="navigator.clipboard.writeText(`https://mail.namgun.or.kr/dav/addressbooks/${user?.email || ''}/`)"
+                class="px-3 py-2 text-sm border rounded-lg hover:bg-accent transition-colors shrink-0"
+                title="복사"
+              >
+                복사
+              </button>
+            </div>
+          </div>
+
+          <div class="text-xs text-muted-foreground space-y-1">
+            <p>사용자명: 이메일 주소 ({{ user?.email }})</p>
+            <p>비밀번호: namgun.or.kr 계정 비밀번호와 동일</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Password section -->
       <div class="rounded-lg border bg-card p-6 space-y-4">
         <h2 class="text-lg font-semibold">비밀번호 변경</h2>

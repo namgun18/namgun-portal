@@ -52,7 +52,10 @@ Authentik  Gitea    Stalwart     BigBlueButton  OMV(NFS)     Game Panel
 - **메일**: Stalwart JMAP 기반 웹메일 클라이언트
 - **화상회의**: BBB API 기반 회의 생성/참가/녹화 관리
 - **Git**: Gitea API 기반 저장소 브라우징, 코드 뷰어 (구문 강조), 이슈/PR 관리
+- **캘린더**: Stalwart JMAP 기반 캘린더 (월/주/일 뷰, 일정 CRUD, 캘린더 공유, CalDAV 동기화)
+- **연락처**: Stalwart JMAP 기반 연락처 관리 (주소록, 검색, CardDAV 동기화)
 - **대시보드**: 종합 홈화면 (서비스 상태, 최근 메일/Git 활동, 회의, 게임서버, 스토리지, 바로가기)
+- **데모 사이트**: demo.namgun.or.kr에서 로그인 없이 UI 체험
 
 ### 관리자 패널
 - 사용자 승인/거절/비활성화
@@ -67,6 +70,9 @@ docker compose --profile prod up -d --build
 
 # 개발 환경
 docker compose --profile dev up -d --build
+
+# 데모 사이트 (mock 데이터, 백엔드 불필요)
+docker compose -f docker-compose.demo.yml up -d --build
 ```
 
 ### 환경 변수
@@ -99,20 +105,25 @@ namgun-portal/
 │       ├── admin/               # 관리자 API (사용자 관리, 권한)
 │       ├── files/               # 파일 브라우저 (NFS)
 │       ├── mail/                # 메일 (JMAP 클라이언트)
+│       ├── calendar/            # 캘린더 (JMAP for Calendars)
+│       ├── contacts/            # 연락처 (JMAP for Contacts)
 │       ├── meetings/            # 화상회의 (BBB API)
 │       ├── git/                 # Git (Gitea API 클라이언트)
 │       ├── dashboard/            # 대시보드 (게임서버 상태 등)
 │       ├── services/            # 서비스 헬스체크
 │       └── db/                  # DB 모델, 세션
 ├── frontend/
-│   ├── pages/                   # Nuxt 페이지 (9개)
-│   ├── components/              # Vue 컴포넌트 (31개)
-│   ├── composables/             # 상태 관리 (5개)
+│   ├── pages/                   # Nuxt 페이지 (11개)
+│   ├── components/              # Vue 컴포넌트 (43개)
+│   ├── composables/             # 상태 관리 (7개)
+│   ├── demo/                    # 데모 모드 mock 데이터
+│   ├── server/middleware/       # Nitro 서버 미들웨어 (데모)
 │   ├── layouts/                 # 레이아웃 (default, auth)
 │   └── middleware/              # 인증 미들웨어
 ├── nginx/                       # 내부 리버스 프록시 설정
 ├── docs/                        # 프로젝트 문서
 ├── docker-compose.yml
+├── docker-compose.demo.yml      # 데모 사이트 전용
 ├── .env.example
 └── README.md
 ```
@@ -126,6 +137,8 @@ namgun-portal/
 | 관리자 | `/api/admin/*` | 사용자 목록, 승인/거절, 권한 관리 |
 | 파일 | `/api/files/*` | 파일 목록/업로드/다운로드/이동/삭제/공유 |
 | 메일 | `/api/mail/*` | 메일박스, 메시지 CRUD, 전송, 첨부파일 |
+| 캘린더 | `/api/calendar/*` | 캘린더/일정 CRUD, 캘린더 공유, CalDAV 동기화 정보 |
+| 연락처 | `/api/contacts/*` | 주소록/연락처 CRUD, CardDAV 동기화 정보 |
 | 회의 | `/api/meetings/*` | 회의 생성/참가/종료, 녹화 관리 |
 | Git | `/api/git/*` | 저장소 검색, 코드 브라우징, 이슈/PR |
 | 대시보드 | `/api/dashboard/*` | 게임서버 상태 조회 |
@@ -151,6 +164,8 @@ namgun-portal/
 | v0.5.2 | 2026-02-21 | 비주얼 리프레시 — 색상 팔레트 분리, 카드/버튼 인터랙션, 그라디언트 히어로·헤더, 위젯 색상 아이콘 |
 | v0.6.0 | 2026-02-22 | LocalStack Lab AWS IaC 학습 환경 + 메일/인증 개선 |
 | v0.6.1 | 2026-02-22 | UI 개선 — Lab 좌우 분할·리사이즈, 메일 팝업 작성·서명 선택, SSR 쿠키 전달, 캐시 제어 |
+| v0.7.0 | 2026-02-22 | 캘린더/연락처 — JMAP 기반 캘린더(월/주/일 뷰, 공유), 연락처 관리, CalDAV/CardDAV 동기화, 데모 사이트(demo.namgun.or.kr) |
+| v0.7.1 | 2026-02-22 | 데모 사이트 버그 수정, SSR 하이드레이션 오류 근본 해결, JMAP 연락처/캘린더 호환성 수정, Nginx 캐시 헤더 강화 |
 
 ## 라이선스
 

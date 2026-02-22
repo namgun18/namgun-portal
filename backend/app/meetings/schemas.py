@@ -42,6 +42,15 @@ class JoinMeetingResponse(BaseModel):
     joinUrl: str
 
 
+class GuestJoinRequest(BaseModel):
+    name: str
+
+
+class InviteLinkResponse(BaseModel):
+    invite_url: str
+    short_url: str
+
+
 class Recording(BaseModel):
     recordID: str
     meetingID: str

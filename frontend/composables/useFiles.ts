@@ -140,6 +140,13 @@ export function useFiles() {
   }
 
   async function downloadFile(path: string) {
+    if (import.meta.client) {
+      const config = useRuntimeConfig()
+      if (config.public.demoMode) {
+        alert('데모 모드에서는 파일 다운로드를 사용할 수 없습니다.')
+        return
+      }
+    }
     const url = `/api/files/download?path=${encodeURIComponent(path)}`
     window.open(url, '_blank')
   }

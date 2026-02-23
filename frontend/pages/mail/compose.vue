@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { UploadedAttachment, ComposeMode, EmailAddress, MessageDetail } from '~/composables/useMail'
 import type { Signature } from '~/composables/useMailSignature'
+import DOMPurify from 'dompurify'
 
 definePageMeta({ layout: false })
 
@@ -42,10 +43,14 @@ const modeLabel = computed(() => {
 
 function parseAddresses(raw: string): EmailAddress[] {
   if (!raw.trim()) return []
-  return raw.split(',').map(s => s.trim()).filter(Boolean).map(email => ({
-    name: null,
-    email: email.replace(/.*<(.+)>.*/, '$1').trim(),
-  }))
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return raw.split(',').map(s => s.trim()).filter(Boolean).map(entry => {
+    // Extract email from "Name <email>" format
+    const bracketMatch = entry.match(/<([^>]+)>/)
+    const email = bracketMatch ? bracketMatch[1].trim() : entry.trim()
+    if (!emailRegex.test(email)) return null
+    return { name: null, email }
+  }).filter((a): a is EmailAddress => a !== null)
 }
 
 function formatFileSize(bytes: number): string {
@@ -95,10 +100,11 @@ function applySignature(sigId: string | null) {
   if (!sig) return
 
   bodyField.value += '\n\n--\n'
+  const cleanSig = DOMPurify.sanitize(sig.html_content)
   if (htmlBody.value) {
-    htmlBody.value += `<div class="signature"><p>--</p>${sig.html_content}</div>`
+    htmlBody.value += `<div class="signature"><p>--</p>${cleanSig}</div>`
   } else {
-    htmlBody.value = `<div class="signature"><p>--</p>${sig.html_content}</div>`
+    htmlBody.value = `<div class="signature"><p>--</p>${cleanSig}</div>`
   }
 }
 
@@ -149,7 +155,7 @@ onMounted(async () => {
 
 async function handleFiles(files: FileList | null) {
   if (!files) return
-  const totalSize = attachments.value.reduce((s, a) => s + a.size, 0)
+  let totalSize = attachments.value.reduce((s, a) => s + a.size, 0)
   for (const file of Array.from(files)) {
     if (totalSize + file.size > 25 * 1024 * 1024) {
       error.value = '첨부파일 총 크기는 25MB를 초과할 수 없습니다.'
@@ -159,6 +165,7 @@ async function handleFiles(files: FileList | null) {
     try {
       const uploaded = await uploadAttachment(file)
       attachments.value.push(uploaded)
+      totalSize += uploaded.size
     } catch (e: any) {
       error.value = e?.data?.detail || '파일 업로드에 실패했습니다.'
     } finally {
@@ -203,7 +210,7 @@ async function handleSend() {
     })
     // Notify parent window to refresh
     if (window.opener) {
-      window.opener.postMessage({ type: 'mail-sent' }, '*')
+      window.opener.postMessage({ type: 'mail-sent' }, window.location.origin)
     }
     window.close()
   } catch (e: any) {

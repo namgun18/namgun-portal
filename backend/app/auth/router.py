@@ -3,7 +3,7 @@
 import secrets
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.db.models import User
 from app.db.session import get_db
+from app.rate_limit import limiter
 from app.auth.deps import (
     PKCE_COOKIE,
     SESSION_COOKIE,
@@ -125,7 +126,8 @@ async def _get_authentik_pk(user: User, db: AsyncSession | None = None) -> int:
 
 
 @router.post("/login")
-async def login_post(body: LoginRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("10/minute")
+async def login_post(request: Request, body: LoginRequest, db: AsyncSession = Depends(get_db)):
     """Authenticate via Authentik Flow Executor (server-side)."""
     try:
         userinfo = await server_side_authenticate(body.username, body.password)
@@ -224,7 +226,8 @@ async def logout():
 
 
 @router.post("/register", status_code=201)
-async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def register(request: Request, body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     """Register a new user (pending admin approval)."""
     email = f"{body.username}@namgun.or.kr"
 
@@ -365,8 +368,9 @@ async def change_password(
 
 
 @router.post("/forgot-password")
+@limiter.limit("3/minute")
 async def forgot_password(
-    body: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)
+    request: Request, body: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)
 ):
     """Send password recovery link to recovery email."""
     result = await db.execute(

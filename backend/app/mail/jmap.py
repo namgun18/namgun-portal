@@ -123,11 +123,12 @@ async def resolve_account_id(email: str) -> str | None:
     if email in _account_cache:
         return _account_cache[email]
 
-    # Try username part (before @)
-    username = email.split("@")[0]
-    if username in _account_cache:
-        _account_cache[email] = _account_cache[username]
-        return _account_cache[email]
+    # Try username part (before @) — only if email has valid format
+    if "@" in email:
+        username = email.split("@")[0]
+        if username and username in _account_cache:
+            _account_cache[email] = _account_cache[username]
+            return _account_cache[email]
 
     return None
 

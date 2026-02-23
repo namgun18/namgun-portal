@@ -1,6 +1,8 @@
 """File browser API endpoints."""
 
 import asyncio
+import os
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -128,9 +130,14 @@ async def upload_file(
     if not real_dir.is_dir():
         raise HTTPException(status_code=400, detail="Target is not a directory")
 
-    target = real_dir / file.filename
-    if "/" in file.filename or "\\" in file.filename:
+    # 파일명 보안 검증: 경로 구분자, .., 널바이트, 제어문자 차단
+    raw_name = file.filename or "upload"
+    safe_name = os.path.basename(raw_name).strip()
+    if not safe_name or safe_name.startswith('.') or '\x00' in safe_name:
         raise HTTPException(status_code=400, detail="Invalid filename")
+    if '..' in safe_name or len(safe_name) > 255:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    target = real_dir / safe_name
 
     # Stream write with size check
     written = 0
@@ -147,7 +154,7 @@ async def upload_file(
             f.write(chunk)
 
     fs.invalidate_cache(real_dir)
-    return {"ok": True, "name": file.filename, "size": written}
+    return {"ok": True, "name": safe_name, "size": written}
 
 
 # ─── Mkdir ───
@@ -256,7 +263,12 @@ async def preview_file(
     if ptype == "image":
         if real.suffix.lower() == ".svg":
             data = real.read_bytes()
-            return Response(content=data, media_type="image/svg+xml")
+            # SVG는 JS 삽입 가능 → CSP 헤더로 스크립트 차단
+            return Response(
+                content=data,
+                media_type="image/svg+xml",
+                headers={"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"},
+            )
         data = pv.generate_thumbnail(real)
         if not data:
             raise HTTPException(status_code=500, detail="Thumbnail generation failed")
@@ -403,7 +415,10 @@ async def download_shared(token: str, db: AsyncSession = Depends(get_db)):
     if link.max_downloads is not None and link.download_count >= link.max_downloads:
         raise HTTPException(status_code=404, detail="Download limit reached")
 
-    real = Path(link.file_path)
+    real = Path(link.file_path).resolve()
+    # 저장소 루트 밖의 파일 접근 차단
+    if not str(real).startswith(str(Path(settings.storage_root).resolve())):
+        raise HTTPException(status_code=403, detail="Access denied")
     if not real.is_file():
         raise HTTPException(status_code=404, detail="File no longer exists")
 

@@ -15,6 +15,7 @@ from app.db.session import get_db
 from app.lab import aws_client as aws
 from app.lab import docker_manager as dm
 from app.lab import terraform_manager as tf
+from app.lab.terraform_manager import TerraformSecurityError
 from app.lab.schemas import (
     DynamoItemPut,
     DynamoTableCreate,
@@ -683,7 +684,10 @@ async def save_tf_files(
     db: AsyncSession = Depends(get_db),
 ):
     env = await _get_env_with_access(env_id, user, db)
-    tf.save_files(env_id, body.files, env.container_name)
+    try:
+        tf.save_files(env_id, body.files, env.container_name)
+    except TerraformSecurityError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return {"ok": True}
 
 
@@ -775,7 +779,10 @@ async def terraform_deploy_from_repo(
         raise HTTPException(status_code=400, detail="환경이 실행 중이 아닙니다")
 
     # Save files
-    tf.save_files(env_id, body.files, env.container_name)
+    try:
+        tf.save_files(env_id, body.files, env.container_name)
+    except TerraformSecurityError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # Init
     init_result = await tf.tf_init(env_id, env.container_name)

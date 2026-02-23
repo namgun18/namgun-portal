@@ -1,5 +1,7 @@
 """Manage LocalStack containers for lab environments."""
 
+import re
+
 import docker
 from docker.errors import NotFound, APIError
 
@@ -8,10 +10,18 @@ NETWORK_NAME = "lab-net"
 MEMORY_LIMIT = "2g"
 CPU_PERIOD = 100_000
 CPU_QUOTA = 200_000  # 2 CPUs
+# 허용 컨테이너 이름 패턴 (lab-{uuid prefix})
+_CONTAINER_NAME_RE = re.compile(r'^lab-[a-f0-9]{8}$')
 
 
 def _client() -> docker.DockerClient:
     return docker.DockerClient(base_url="unix:///var/run/docker.sock")
+
+
+def _validate_container_name(name: str) -> None:
+    """Only allow lab-prefixed container names to prevent arbitrary container access."""
+    if not _CONTAINER_NAME_RE.match(name):
+        raise ValueError(f"Invalid container name: {name}")
 
 
 def create_container(env_id: str) -> dict:
@@ -46,6 +56,7 @@ def create_container(env_id: str) -> dict:
 
 
 def start_container(container_name: str) -> None:
+    _validate_container_name(container_name)
     client = _client()
     container = client.containers.get(container_name)
     if container.status != "running":
@@ -53,6 +64,7 @@ def start_container(container_name: str) -> None:
 
 
 def stop_container(container_name: str) -> None:
+    _validate_container_name(container_name)
     client = _client()
     try:
         container = client.containers.get(container_name)
@@ -62,6 +74,7 @@ def stop_container(container_name: str) -> None:
 
 
 def remove_container(container_name: str) -> None:
+    _validate_container_name(container_name)
     client = _client()
     try:
         container = client.containers.get(container_name)
@@ -71,6 +84,7 @@ def remove_container(container_name: str) -> None:
 
 
 def get_status(container_name: str) -> str:
+    _validate_container_name(container_name)
     client = _client()
     try:
         container = client.containers.get(container_name)

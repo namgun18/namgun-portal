@@ -1,5 +1,8 @@
 """Mail API endpoints."""
 
+from urllib.parse import quote
+
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import Response
 from sqlalchemy import select
@@ -440,14 +443,25 @@ async def download_blob(
     account_id = await _get_account_id(user)
     try:
         resp = await jmap.download_blob(account_id, blob_id)
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Mail server timeout")
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            raise HTTPException(status_code=404, detail="Blob not found")
+        raise HTTPException(status_code=502, detail="Mail server error")
     except Exception:
-        raise HTTPException(status_code=404, detail="Blob not found")
+        raise HTTPException(status_code=502, detail="Failed to download blob")
 
     content_type = resp.headers.get("content-type", "application/octet-stream")
+    # RFC 5987 encoded filename to prevent header injection
+    safe_name = name.replace('"', '').replace('\n', '').replace('\r', '')
+    encoded_name = quote(safe_name, safe='')
     return Response(
         content=resp.content,
         media_type=content_type,
-        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+        headers={
+            "Content-Disposition": f"attachment; filename=\"{safe_name}\"; filename*=UTF-8''{encoded_name}",
+        },
     )
 
 

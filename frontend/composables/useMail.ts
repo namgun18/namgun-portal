@@ -345,9 +345,10 @@ export function useMail() {
     window.open(url, '_blank')
   }
 
-  // Listen for compose window postMessage
+  // Listen for compose window postMessage (origin 검증)
   if (import.meta.client) {
     window.addEventListener('message', (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return
       if (event.data?.type === 'mail-sent') {
         refresh()
       }

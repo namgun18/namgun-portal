@@ -1,7 +1,8 @@
 <script setup lang="ts">
 let DOMPurify: any = null
+const purifyReady = ref(false)
 if (import.meta.client) {
-  import('dompurify').then(m => { DOMPurify = m.default })
+  import('dompurify').then(m => { DOMPurify = m.default; purifyReady.value = true })
 }
 
 const {
@@ -50,18 +51,61 @@ function getInitial(msg: any): string {
 
 const sanitizedHtml = computed(() => {
   if (!selectedMessage.value?.html_body) return ''
-  if (!DOMPurify) return selectedMessage.value.html_body
+  // DOMPurify 로딩 전에는 빈 문자열 반환 (미정제 HTML 노출 방지)
+  if (!DOMPurify) return ''
+  // purifyReady를 참조하여 Vue reactivity 트리거
+  if (!purifyReady.value) return ''
   return DOMPurify.sanitize(selectedMessage.value.html_body, {
     ALLOW_TAGS: [
       'a', 'b', 'i', 'u', 'em', 'strong', 'p', 'br', 'div', 'span',
       'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-      'table', 'thead', 'tbody', 'tr', 'td', 'th',
+      'table', 'thead', 'tbody', 'tr', 'td', 'th', 'caption', 'colgroup', 'col',
       'blockquote', 'pre', 'code', 'hr', 'img', 'sub', 'sup',
+      'center', 'font',
     ],
-    ALLOW_ATTR: ['href', 'src', 'alt', 'style', 'class', 'target', 'width', 'height'],
+    ALLOW_ATTR: ['href', 'src', 'alt', 'style', 'class', 'target', 'width', 'height',
+                  'cellpadding', 'cellspacing', 'border', 'align', 'valign', 'bgcolor',
+                  'color', 'size', 'face', 'dir', 'colspan', 'rowspan'],
     ADD_ATTR: ['target'],
+    FORBID_TAGS: ['script', 'style', 'meta', 'head', 'link', 'object', 'embed', 'form', 'input'],
   })
 })
+
+// iframe srcdoc: 메일 HTML을 격리된 iframe에서 렌더링 + postMessage로 높이 전달
+const iframeSrcdoc = computed(() => {
+  if (!sanitizedHtml.value) return ''
+  const isDark = document?.documentElement?.classList?.contains('dark')
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.6; word-break: break-word; overflow-wrap: break-word; ${isDark ? 'color: #e5e7eb; background: transparent;' : 'color: #1f2937; background: transparent;'} }
+    a { color: #3b82f6; }
+    img { max-width: 100%; height: auto; }
+    table { max-width: 100%; }
+    pre { white-space: pre-wrap; }
+  </style></head><body>${sanitizedHtml.value}<script>
+    function sendHeight() { parent.postMessage({ type: 'mail-iframe-height', height: document.body.scrollHeight }, '*'); }
+    sendHeight();
+    new MutationObserver(sendHeight).observe(document.body, { childList: true, subtree: true, attributes: true });
+    document.querySelectorAll('img').forEach(function(img) { img.addEventListener('load', sendHeight); });
+    window.addEventListener('load', sendHeight);
+    document.querySelectorAll('a').forEach(function(a) { a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer'); });
+  <\/script></body></html>`
+})
+
+// postMessage로 iframe 높이 수신 (origin 검증 포함)
+if (import.meta.client) {
+  window.addEventListener('message', (e: MessageEvent) => {
+    // srcdoc iframe은 origin이 'null'
+    if (e.origin !== 'null' && e.origin !== window.location.origin) return
+    if (e.data?.type === 'mail-iframe-height' && e.data.height) {
+      const iframes = document.querySelectorAll<HTMLIFrameElement>('iframe[data-mail-frame]')
+      iframes.forEach(iframe => {
+        if (iframe.contentWindow === e.source) {
+          iframe.style.height = e.data.height + 'px'
+        }
+      })
+    }
+  })
+}
 
 function handleDelete() {
   if (!selectedMessage.value) return
@@ -188,10 +232,13 @@ function handleForward() {
 
         <!-- Body content -->
         <div class="px-6 py-4">
-          <div
+          <iframe
             v-if="sanitizedHtml"
-            class="prose prose-sm dark:prose-invert max-w-none break-words [&_img]:max-w-full [&_a]:text-primary"
-            v-html="sanitizedHtml"
+            :srcdoc="iframeSrcdoc"
+            sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+            data-mail-frame
+            class="w-full border-0 min-h-[100px]"
+            style="height: 200px;"
           />
           <pre
             v-else-if="selectedMessage.text_body"
@@ -285,10 +332,13 @@ function handleForward() {
         </div>
         <div class="mx-4 border-t" />
         <div class="px-4 py-3">
-          <div
+          <iframe
             v-if="sanitizedHtml"
-            class="prose prose-sm dark:prose-invert max-w-none break-words [&_img]:max-w-full"
-            v-html="sanitizedHtml"
+            :srcdoc="iframeSrcdoc"
+            sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+            data-mail-frame
+            class="w-full border-0 min-h-[100px]"
+            style="height: 200px;"
           />
           <pre
             v-else-if="selectedMessage.text_body"

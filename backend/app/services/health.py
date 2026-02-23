@@ -18,6 +18,7 @@ SERVICE_DEFS = [
     {
         "name": "Gitea",
         "health_url": "http://192.168.0.50:3000/api/v1/version",
+        "health_headers": {"Authorization": "token 3fea3feb8153dee6707cf12258343d357c9a1d01"},
         "external_url": "https://git.namgun.or.kr/user/oauth2/portal",
         "internal_only": False,
     },
@@ -35,7 +36,7 @@ SERVICE_DEFS = [
     },
     {
         "name": "Stalwart Mail",
-        "health_url": "http://192.168.0.250:8080/health/liveness",
+        "health_url": "http://192.168.0.250:8080/.well-known/jmap",
         "external_url": "https://mail.namgun.or.kr",
         "internal_only": True,
     },
@@ -69,8 +70,9 @@ async def check_service(svc: dict) -> ServiceStatus:
             elapsed_ms = int((time.monotonic() - start) * 1000)
             status = "ok"
         else:
-            async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
-                resp = await client.get(svc["health_url"])
+            headers = svc.get("health_headers", {})
+            async with httpx.AsyncClient(timeout=10.0, verify=False, follow_redirects=True) as client:
+                resp = await client.get(svc["health_url"], headers=headers)
                 elapsed_ms = int((time.monotonic() - start) * 1000)
                 status = "ok" if resp.status_code < 400 else "down"
     except Exception:

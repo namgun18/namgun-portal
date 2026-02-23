@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import shutil
 from pathlib import Path
 
@@ -11,8 +12,39 @@ WORKSPACE_ROOT = Path("/tmp/lab-workspaces")
 TERRAFORM_BIN = "terraform"
 TF_TIMEOUT = 180  # seconds
 
+# Terraform 보안: 차단 키워드 (provisioner, external data source 등)
+_BLOCKED_PATTERNS = [
+    re.compile(r'\bprovisioner\s+"', re.IGNORECASE),
+    re.compile(r'\bprovisioner\s+\{', re.IGNORECASE),
+    re.compile(r'\bdata\s+"external"', re.IGNORECASE),
+    re.compile(r'\bdata\s+"http"', re.IGNORECASE),
+    re.compile(r'\blocal-exec\b', re.IGNORECASE),
+    re.compile(r'\bremote-exec\b', re.IGNORECASE),
+    re.compile(r'\bfile\(\s*"/', re.IGNORECASE),  # file("/etc/...")
+]
+
+# 허용된 리소스 프로바이더 (aws, archive만 허용)
+_ALLOWED_PROVIDERS = {"aws", "archive"}
+
+
+class TerraformSecurityError(Exception):
+    pass
+
+
+def _validate_tf_content(content: str) -> None:
+    """Validate Terraform content for dangerous patterns."""
+    for pattern in _BLOCKED_PATTERNS:
+        match = pattern.search(content)
+        if match:
+            raise TerraformSecurityError(
+                f"보안 정책 위반: '{match.group()}' 구문은 사용할 수 없습니다"
+            )
+
 
 def _workspace_dir(env_id: str) -> Path:
+    # env_id가 UUID 형식인지 검증 (경로 탈출 방지)
+    if not re.match(r'^[a-f0-9\-]{36}$', env_id):
+        raise TerraformSecurityError("Invalid environment ID")
     d = WORKSPACE_ROOT / env_id
     d.mkdir(parents=True, exist_ok=True)
     return d
@@ -276,6 +308,11 @@ def save_files(env_id: str, files: dict[str, str], container_name: str) -> None:
     for name, content in files.items():
         if name == "provider.tf":
             continue  # Skip user attempts to overwrite provider
+        # 파일명 검증 (경로 탈출 방지)
+        if not re.match(r'^[a-zA-Z0-9_\-]+\.tf$', name):
+            continue
+        # 내용 보안 검증 (provisioner, local-exec 등 차단)
+        _validate_tf_content(content)
         if name.endswith(".tf"):
             (workspace / name).write_text(content)
 

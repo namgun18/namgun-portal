@@ -1,10 +1,12 @@
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse, JSONResponse
+from slowapi.errors import RateLimitExceeded
 
 from app.config import get_settings
+from app.rate_limit import limiter
 from app.db.session import init_db
 from app.auth.router import router as auth_router
 from app.auth.oauth_provider import router as oauth_router
@@ -49,6 +51,17 @@ app = FastAPI(
     docs_url="/api/docs" if settings.debug else None,
     redoc_url=None,
 )
+
+# Rate limit 초과 시 429 반환
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."},
+    )
 
 app.include_router(auth_router)
 app.include_router(oauth_router)

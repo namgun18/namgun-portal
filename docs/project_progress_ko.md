@@ -21,6 +21,7 @@
 | v1.8 | 2026-02-22 | 남기완 | v0.7.1 데모 사이트 버그 수정 + Nginx 캐시 헤더 강화 추가 |
 | v1.9 | 2026-02-22 | 남기완 | Stalwart + LDAP Outpost 네이티브 마이그레이션 (Podman → systemd) |
 | v2.0 | 2026-02-22 | 남기완 | **v1.0.0 정식 릴리즈** — SELinux Enforcing, 잔여 작업 정리, WSL Docker 포트 자동복구 |
+| v2.1 | 2026-02-23 | 남기완 | Phase 16: 보안 취약점 감사 및 수정 (Critical 4건 + High 4건 + Medium 9건) |
 
 ---
 
@@ -58,6 +59,7 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 | Phase 13 | LocalStack Lab — AWS IaC 학습 환경 | **완료** | — | Terraform IaC, 사용자별 LocalStack 컨테이너, 토폴로지 시각화, 템플릿, CI/CD |
 | Phase 14 | UI 개선 및 SSR 인증 수정 | **완료** | — | Lab 좌우 분할·리사이즈, 메일 팝업 작성·서명 선택, SSR 쿠키 전달, Nginx 캐시 제어 (v0.6.1) |
 | Phase 15 | 캘린더/연락처 + 데모 사이트 | **완료** | — | JMAP 캘린더/연락처, 캘린더 공유, CalDAV/CardDAV, demo.namgun.or.kr (v0.7.0 → v0.7.1) |
+| Phase 16 | 보안 취약점 감사 및 수정 | **완료** | — | 전체 코드 보안 감사, Critical 4건 + High 4건 + Medium 9건 수정, Rate Limiting 도입 |
 
 ---
 
@@ -1564,6 +1566,67 @@ location = /.well-known/carddav { return 301 /dav/; }
 
 ---
 
+## 20.5. Phase 16: 보안 취약점 감사 및 수정 (완료, 2026-02-23)
+
+전체 포털 코드에 대한 보안 감사를 실시하고, 발견된 취약점을 수정하였다. 메일 모듈(JMAP 클라이언트, 메일 라우터, 메일 뷰어, 메일 작성)과 전체 백엔드/프론트엔드 코드를 대상으로 하였다.
+
+### 20.5.1 메일 모듈 보안 수정 (Critical 4건 + Medium 6건)
+
+| 심각도 | 취약점 | 수정 내용 | 수정 파일 |
+|--------|--------|----------|----------|
+| **CRITICAL** | HTTP Header Injection (Content-Disposition) | RFC 5987 인코딩 적용, 따옴표/개행 제거 | `backend/app/mail/router.py` |
+| **CRITICAL** | postMessage origin 미검증 (MailView iframe) | `e.origin` 검증 추가 (`'null'` 또는 자체 origin만 허용) | `frontend/components/mail/MailView.vue` |
+| **CRITICAL** | postMessage origin 미검증 (Compose 팝업) | `window.location.origin` 지정, 수신 측 origin 검증 | `frontend/pages/mail/compose.vue`, `frontend/composables/useMail.ts` |
+| **CRITICAL** | 이메일 주소 파싱 부실 (regex 탈출) | `<>` 파싱 개선 + 이메일 형식 정규식 검증 | `frontend/pages/mail/compose.vue` |
+| MEDIUM | DOMPurify 로딩 전 미정제 HTML 노출 | 로딩 전 빈 문자열 반환 (`purifyReady` ref) | `frontend/components/mail/MailView.vue` |
+| MEDIUM | DOMPurify 과다 허용 태그 | `style/meta/head/link/object/embed/form` FORBID 처리 | `frontend/components/mail/MailView.vue` |
+| MEDIUM | 서명 HTML XSS | DOMPurify sanitize 적용 후 삽입 | `frontend/pages/mail/compose.vue` |
+| MEDIUM | Blob 다운로드 에러 뭉개기 | 에러 유형별 분류 (Timeout→504, 404→404, 기타→502) | `backend/app/mail/router.py` |
+| MEDIUM | JMAP 계정 해석 fallback 검증 부족 | `@` 포맷 체크 후 username fallback | `backend/app/mail/jmap.py` |
+| LOW | 서명 HTML 길이 무제한 | `max_length=50000` 제한 | `backend/app/mail/schemas.py` |
+| LOW | 첨부 용량 누적 버그 | `let totalSize` + 루프 내 누적 처리 | `frontend/pages/mail/compose.vue` |
+
+### 20.5.2 전체 포털 보안 수정 (Critical 3건 + High 5건)
+
+| 심각도 | 취약점 | 수정 내용 | 수정 파일 |
+|--------|--------|----------|----------|
+| **CRITICAL** | SVG 파일 XSS (JavaScript 삽입 가능) | SVG 응답에 CSP `default-src 'none'` 헤더 추가 | `backend/app/files/router.py` |
+| **CRITICAL** | Terraform 사용자 코드 실행 (provisioner/local-exec) | `_BLOCKED_PATTERNS` 정규식으로 위험 구문 차단 + env_id UUID 검증 | `backend/app/lab/terraform_manager.py` |
+| **CRITICAL** | .env 시크릿 평문 노출 | `.gitignore`에 이미 포함, git 추적 안 됨 확인 | `.gitignore` |
+| **HIGH** | Docker 소켓 임의 컨테이너 접근 | 컨테이너 이름 패턴 검증 (`lab-[a-f0-9]{8}`만 허용) | `backend/app/lab/docker_manager.py` |
+| **HIGH** | 파일 업로드 파일명 검증 미흡 | `os.path.basename` + `.`시작/`..`/널바이트/255자 초과 차단 | `backend/app/files/router.py` |
+| **HIGH** | 공유 링크 경로 탈출 (Path Traversal) | `storage_root` 범위 밖 파일 접근 차단 (resolve + prefix 검증) | `backend/app/files/router.py` |
+| **HIGH** | Rate Limiting 미적용 | slowapi 도입, 로그인 10/min, 회원가입 5/min, 비밀번호찾기 3/min, 전체 60/min | `backend/app/rate_limit.py`, `backend/app/main.py`, `backend/app/auth/router.py` |
+| **HIGH** | Shiki v-html XSS | DOMPurify sanitize 추가 | `frontend/components/git/GitFileViewer.vue` |
+
+### 20.5.3 추가된 의존성
+
+| 패키지 | 용도 |
+|--------|------|
+| `slowapi==0.1.9` | IP 기반 API Rate Limiting |
+
+### 20.5.4 수정 파일 목록 (15개)
+
+| # | 파일 | 작업 |
+|---|------|------|
+| 1 | `backend/app/mail/router.py` | Header Injection 수정 + Blob 에러 분류 |
+| 2 | `backend/app/mail/jmap.py` | 계정 해석 fallback 검증 |
+| 3 | `backend/app/mail/schemas.py` | 서명 길이 제한 |
+| 4 | `backend/app/files/router.py` | SVG CSP + 파일명 검증 + 공유 링크 경로 검증 |
+| 5 | `backend/app/lab/terraform_manager.py` | Terraform 보안 검증 + 경로 탈출 방지 |
+| 6 | `backend/app/lab/docker_manager.py` | 컨테이너 이름 검증 |
+| 7 | `backend/app/lab/router.py` | TerraformSecurityError 핸들링 |
+| 8 | `backend/app/main.py` | Rate Limiting 미들웨어 등록 |
+| 9 | `backend/app/auth/router.py` | 로그인/회원가입/비밀번호찾기 Rate Limit |
+| 10 | `backend/app/rate_limit.py` | **신규** — slowapi Limiter 인스턴스 |
+| 11 | `backend/requirements.txt` | slowapi 추가 |
+| 12 | `frontend/components/mail/MailView.vue` | DOMPurify 레이스 컨디션 + 태그 제한 + postMessage origin 검증 |
+| 13 | `frontend/pages/mail/compose.vue` | 이메일 파싱 + 서명 XSS + postMessage origin + 첨부 용량 |
+| 14 | `frontend/composables/useMail.ts` | postMessage origin 검증 |
+| 15 | `frontend/components/git/GitFileViewer.vue` | Shiki 출력 DOMPurify sanitize |
+
+---
+
 ## 21. 핵심 트러블슈팅 정리
 
 | # | 문제 | 원인 | 해결 방법 |
@@ -1680,6 +1743,18 @@ location = /.well-known/carddav { return 301 /dav/; }
 | Nginx 캐시 헤더 `always` 강화 + 외부 `map $uri` 캐시 제어 | Phase 15 (v0.7.1) |
 | SSR 하이드레이션 오류 근본 해결 (colorMode, Date 시간대) | Phase 15 (v0.7.1) |
 | JMAP 연락처 `unsupportedSort` + `filter: null` 수정 | Phase 15 (v0.7.1) |
+| 전체 코드 보안 감사 (Critical 4 + High 4 + Medium 9) | Phase 16 |
+| Content-Disposition Header Injection 수정 | Phase 16 |
+| postMessage origin 검증 (MailView, Compose, useMail) | Phase 16 |
+| 이메일 주소 파싱 정규식 검증 강화 | Phase 16 |
+| DOMPurify 레이스 컨디션 + 과다 허용 태그 수정 | Phase 16 |
+| SVG 파일 서빙 CSP 헤더 추가 | Phase 16 |
+| Terraform 코드 보안 검증 (provisioner 차단) | Phase 16 |
+| Docker 컨테이너 이름 패턴 검증 | Phase 16 |
+| 파일 업로드 파일명 검증 강화 | Phase 16 |
+| 공유 링크 경로 탈출 방지 | Phase 16 |
+| API Rate Limiting (slowapi) 도입 | Phase 16 |
+| Shiki v-html DOMPurify sanitize 추가 | Phase 16 |
 
 ### 22.3 인프라 변경: Stalwart + LDAP Outpost 네이티브 마이그레이션 (2026-02-22)
 
@@ -1761,6 +1836,10 @@ location = /.well-known/carddav { return 301 /dav/; }
 - 서버 정보 노출 차단 (`server_tokens off`, `X-Powered-By` / `Server` 헤더 제거)
 - 스캐너/봇 차단 규칙
 - CSP(Content-Security-Policy) 전 사이트 적용 (Phase 12)
+- API Rate Limiting — slowapi 기반 IP별 요청 제한 (Phase 16)
+- SVG 파일 서빙 시 CSP `default-src 'none'` 적용 (Phase 16)
+- Terraform 사용자 코드 보안 검증 (provisioner/local-exec 차단, Phase 16)
+- Docker 컨테이너 이름 패턴 검증 (lab-prefix 강제, Phase 16)
 
 **인증/암호화:**
 - DKIM + SPF + DMARC 이메일 인증 체계
@@ -1768,6 +1847,9 @@ location = /.well-known/carddav { return 301 /dav/; }
 - 서명된 세션 쿠키 (itsdangerous, httponly, secure, samesite=lax)
 - 파일 시스템 path traversal 방지 (resolve + prefix 검증)
 - 리다이렉트 URL 도메인 화이트리스트 (`*.namgun.or.kr`)
+- postMessage origin 검증 (iframe/popup 간 통신, Phase 16)
+- DOMPurify HTML 정제 (메일 본문, 서명, 코드 하이라이팅, Phase 16)
+- Content-Disposition RFC 5987 인코딩 (헤더 인젝션 방지, Phase 16)
 
 **보안 아키텍처 (다층 방어):**
 ```
@@ -1782,4 +1864,4 @@ location = /.well-known/carddav { return 301 /dav/; }
 
 ---
 
-*문서 끝. 최종 갱신: 2026-02-22 (v2.0 — 프로젝트 v1.0.0 정식 릴리즈)*
+*문서 끝. 최종 갱신: 2026-02-23 (v2.1 — Phase 16 보안 취약점 감사 및 수정)*

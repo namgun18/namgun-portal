@@ -19,6 +19,7 @@
 | v1.6 | 2026-02-22 | 남기완 | Added Phase 14 (UI Improvements & SSR Auth Fix) |
 | v1.7 | 2026-02-22 | 남기완 | Added Phase 15 (Calendar/Contacts + Demo Site) |
 | v1.8 | 2026-02-22 | 남기완 | Added v0.7.1 demo site bug fixes + Nginx cache header hardening |
+| v1.9 | 2026-02-23 | 남기완 | Phase 16: Security Vulnerability Audit & Remediation (4 Critical + 4 High + 9 Medium) |
 
 ---
 
@@ -56,6 +57,7 @@ The namgun.or.kr Integrated Portal is a self-hosted, unified platform designed f
 | Phase 13 | LocalStack Lab — AWS IaC Learning Environment | **Complete** | — | Terraform IaC, per-user LocalStack containers, topology visualization, templates, CI/CD |
 | Phase 14 | UI Improvements & SSR Auth Fix | **Complete** | — | Lab left-right split with drag resize, mail compose popup with signature selection, SSR cookie forwarding, Nginx cache control (v0.6.1) |
 | Phase 15 | Calendar/Contacts + Demo Site | **Complete** | — | JMAP Calendar/Contacts, calendar sharing, CalDAV/CardDAV, demo.namgun.or.kr (v0.7.0 → v0.7.1) |
+| Phase 16 | Security Vulnerability Audit & Remediation | **Complete** | — | Full code security audit, 4 Critical + 4 High + 9 Medium fixes, Rate Limiting |
 
 ---
 
@@ -1447,6 +1449,67 @@ Demo site quality issues, SSR hydration errors, and JMAP compatibility problems 
 
 ---
 
+## 20.5. Phase 16: Security Vulnerability Audit & Remediation (Complete, 2026-02-23)
+
+Conducted a comprehensive security audit across the entire portal codebase and remediated all discovered vulnerabilities. The audit covered the mail module (JMAP client, mail router, mail viewer, composer) and all backend/frontend code.
+
+### 20.5.1 Mail Module Security Fixes (4 Critical + 6 Medium)
+
+| Severity | Vulnerability | Fix | File |
+|----------|--------------|-----|------|
+| **CRITICAL** | HTTP Header Injection (Content-Disposition) | RFC 5987 encoding, strip quotes/newlines | `backend/app/mail/router.py` |
+| **CRITICAL** | postMessage origin not validated (MailView iframe) | Added `e.origin` validation (`'null'` or same-origin only) | `frontend/components/mail/MailView.vue` |
+| **CRITICAL** | postMessage origin not validated (Compose popup) | Specified `window.location.origin`, receiver-side origin check | `frontend/pages/mail/compose.vue`, `frontend/composables/useMail.ts` |
+| **CRITICAL** | Email address parsing insufficient validation | Improved `<>` parsing + email format regex validation | `frontend/pages/mail/compose.vue` |
+| MEDIUM | DOMPurify race condition (unsanitized HTML fallback) | Return empty string until loaded (`purifyReady` ref) | `frontend/components/mail/MailView.vue` |
+| MEDIUM | Overly permissive DOMPurify config | FORBID `style/meta/head/link/object/embed/form` tags | `frontend/components/mail/MailView.vue` |
+| MEDIUM | Signature HTML XSS | DOMPurify sanitize before embedding | `frontend/pages/mail/compose.vue` |
+| MEDIUM | Blob download error masking | Error classification (Timeout→504, 404→404, other→502) | `backend/app/mail/router.py` |
+| MEDIUM | JMAP account resolution fallback without validation | `@` format check before username fallback | `backend/app/mail/jmap.py` |
+| LOW | No size limit on signature HTML | `max_length=50000` constraint | `backend/app/mail/schemas.py` |
+| LOW | Attachment size accumulation bug | `let totalSize` + in-loop accumulation | `frontend/pages/mail/compose.vue` |
+
+### 20.5.2 Full Portal Security Fixes (3 Critical + 5 High)
+
+| Severity | Vulnerability | Fix | File |
+|----------|--------------|-----|------|
+| **CRITICAL** | SVG file XSS (JavaScript injection possible) | CSP `default-src 'none'` header on SVG responses | `backend/app/files/router.py` |
+| **CRITICAL** | Terraform user code execution (provisioner/local-exec) | `_BLOCKED_PATTERNS` regex blocking + env_id UUID validation | `backend/app/lab/terraform_manager.py` |
+| **CRITICAL** | .env secrets in plaintext | Already in `.gitignore`, not tracked by git — confirmed safe | `.gitignore` |
+| **HIGH** | Docker socket arbitrary container access | Container name pattern validation (`lab-[a-f0-9]{8}` only) | `backend/app/lab/docker_manager.py` |
+| **HIGH** | File upload filename validation insufficient | `os.path.basename` + block dotfiles/`..`/null bytes/255+ chars | `backend/app/files/router.py` |
+| **HIGH** | Shared link path traversal | Block file access outside `storage_root` (resolve + prefix check) | `backend/app/files/router.py` |
+| **HIGH** | No Rate Limiting | slowapi: login 10/min, register 5/min, forgot-password 3/min, global 60/min | `backend/app/rate_limit.py`, `backend/app/main.py`, `backend/app/auth/router.py` |
+| **HIGH** | Shiki v-html XSS | Added DOMPurify sanitize | `frontend/components/git/GitFileViewer.vue` |
+
+### 20.5.3 New Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `slowapi==0.1.9` | IP-based API Rate Limiting |
+
+### 20.5.4 Modified Files (15)
+
+| # | File | Change |
+|---|------|--------|
+| 1 | `backend/app/mail/router.py` | Header Injection fix + Blob error classification |
+| 2 | `backend/app/mail/jmap.py` | Account resolution fallback validation |
+| 3 | `backend/app/mail/schemas.py` | Signature length limit |
+| 4 | `backend/app/files/router.py` | SVG CSP + filename validation + shared link path check |
+| 5 | `backend/app/lab/terraform_manager.py` | Terraform security validation + path traversal prevention |
+| 6 | `backend/app/lab/docker_manager.py` | Container name validation |
+| 7 | `backend/app/lab/router.py` | TerraformSecurityError handling |
+| 8 | `backend/app/main.py` | Rate Limiting middleware registration |
+| 9 | `backend/app/auth/router.py` | Login/Register/ForgotPassword rate limits |
+| 10 | `backend/app/rate_limit.py` | **New** — slowapi Limiter instance |
+| 11 | `backend/requirements.txt` | Added slowapi |
+| 12 | `frontend/components/mail/MailView.vue` | DOMPurify race condition + tag restrictions + postMessage origin |
+| 13 | `frontend/pages/mail/compose.vue` | Email parsing + signature XSS + postMessage origin + attachment size |
+| 14 | `frontend/composables/useMail.ts` | postMessage origin validation |
+| 15 | `frontend/components/git/GitFileViewer.vue` | Shiki output DOMPurify sanitize |
+
+---
+
 ## 21. Key Troubleshooting Summary
 
 | # | Problem | Cause | Resolution |
@@ -1561,6 +1624,18 @@ Demo site quality issues, SSR hydration errors, and JMAP compatibility problems 
 | Nginx cache header `always` hardening + external `map $uri` cache control | Phase 15 (v0.7.1) |
 | SSR hydration error root fix (colorMode, Date timezone) | Phase 15 (v0.7.1) |
 | JMAP contacts `unsupportedSort` + `filter: null` fix | Phase 15 (v0.7.1) |
+| Full code security audit (4 Critical + 4 High + 9 Medium) | Phase 16 |
+| Content-Disposition Header Injection fix | Phase 16 |
+| postMessage origin validation (MailView, Compose, useMail) | Phase 16 |
+| Email address parsing regex validation hardening | Phase 16 |
+| DOMPurify race condition + overly permissive tags fix | Phase 16 |
+| SVG file serving CSP header added | Phase 16 |
+| Terraform code security validation (provisioner blocking) | Phase 16 |
+| Docker container name pattern validation | Phase 16 |
+| File upload filename validation hardening | Phase 16 |
+| Shared link path traversal prevention | Phase 16 |
+| API Rate Limiting (slowapi) introduced | Phase 16 |
+| Shiki v-html DOMPurify sanitize added | Phase 16 |
 
 ### 22.3 Future Plans
 
@@ -1611,13 +1686,20 @@ Demo site quality issues, SSR hydration errors, and JMAP compatibility problems 
 - CSP (Content-Security-Policy) applied across all sites (Phase 12)
 - firewalld firewall activated on all servers (Phase 12)
 - Regular OS security patch application (Phase 12)
+- API Rate Limiting — slowapi IP-based request limiting (Phase 16)
+- SVG file serving CSP `default-src 'none'` applied (Phase 16)
+- Terraform user code security validation (provisioner/local-exec blocking, Phase 16)
+- Docker container name pattern validation (lab-prefix enforcement, Phase 16)
+- postMessage origin validation (iframe/popup communication, Phase 16)
+- DOMPurify HTML sanitization (mail body, signatures, code highlighting, Phase 16)
+- Content-Disposition RFC 5987 encoding (header injection prevention, Phase 16)
 
 ### 24.2 Planned Security Enhancements
 
 - Complete reverse DNS verification through PTR record registration
 - Strengthen Authentik MFA (multi-factor authentication) policies
-- Mail server SELinux Permissive → Enforcing transition (requires reboot verification)
+- ~~Mail server SELinux Permissive → Enforcing transition~~ → **Complete** (2026-02-22)
 
 ---
 
-*End of document. Last updated: 2026-02-22 (v1.8)*
+*End of document. Last updated: 2026-02-23 (v1.9 — Phase 16 Security Vulnerability Audit & Remediation)*

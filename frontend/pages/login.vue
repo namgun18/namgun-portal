@@ -26,7 +26,11 @@ watch(user, (u) => {
   if (u) {
     const dest = redirectTo.value
     if (dest.startsWith('https://') || dest.startsWith('/oauth/')) {
-      window.location.href = dest
+      if (import.meta.client) {
+        window.location.href = dest
+      } else {
+        navigateTo(dest, { external: true })
+      }
     } else {
       navigateTo(dest)
     }

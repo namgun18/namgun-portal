@@ -43,12 +43,16 @@ async function highlight() {
 
   loading.value = true
   try {
-    const { codeToHtml } = await import('shiki')
+    const [{ codeToHtml }, { default: DOMPurify }] = await Promise.all([
+      import('shiki'),
+      import('dompurify'),
+    ])
     const lang = detectLang(fileContent.value.name)
-    highlightedHtml.value = await codeToHtml(fileContent.value.content, {
+    const raw = await codeToHtml(fileContent.value.content, {
       lang,
       themes: { light: 'github-light', dark: 'github-dark' },
     })
+    highlightedHtml.value = DOMPurify.sanitize(raw)
   } catch {
     highlightedHtml.value = ''
   } finally {

@@ -1,6 +1,6 @@
 """Mail API schemas."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class EmailAddress(BaseModel):
@@ -104,14 +104,14 @@ class BulkActionRequest(BaseModel):
 
 
 class SignatureCreate(BaseModel):
-    name: str
-    html_content: str
+    name: str = Field(..., max_length=100)
+    html_content: str = Field(..., max_length=50000)
     is_default: bool = False
 
 
 class SignatureUpdate(BaseModel):
-    name: str | None = None
-    html_content: str | None = None
+    name: str | None = Field(None, max_length=100)
+    html_content: str | None = Field(None, max_length=50000)
     is_default: bool | None = None
 
 

@@ -167,7 +167,7 @@ async function handleDrop(e: DragEvent) {
         <FilesFileDetailPanel
           :item="detailItem"
           @close="detailItem = null"
-          @download="downloadFile"
+          @download="(path: string, isDir: boolean) => downloadFile(path, isDir)"
           @share="(item: FileItem) => { shareFile = item }"
           @rename="handleRename"
           @delete="handleDelete"

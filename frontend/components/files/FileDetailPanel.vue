@@ -7,7 +7,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  download: [path: string]
+  download: [path: string, isDir: boolean]
   share: [item: FileItem]
   rename: [item: FileItem]
   move: [item: FileItem]
@@ -85,9 +85,9 @@ function isImage(item: FileItem) {
 
     <!-- Actions -->
     <div class="p-3 border-t space-y-1">
-      <button v-if="!item.is_dir" @click="emit('download', item.path)" class="w-full text-left px-3 py-1.5 text-sm rounded-md hover:bg-accent transition-colors flex items-center gap-2">
+      <button @click="emit('download', item.path, item.is_dir)" class="w-full text-left px-3 py-1.5 text-sm rounded-md hover:bg-accent transition-colors flex items-center gap-2">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-        다운로드
+        {{ item.is_dir ? 'ZIP 다운로드' : '다운로드' }}
       </button>
       <button v-if="!item.is_dir" @click="emit('share', item)" class="w-full text-left px-3 py-1.5 text-sm rounded-md hover:bg-accent transition-colors flex items-center gap-2">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>
@@ -144,9 +144,9 @@ function isImage(item: FileItem) {
 
       <!-- Actions -->
       <div class="p-2 space-y-0.5 overflow-auto">
-        <button v-if="!item.is_dir" @click="emit('download', item.path); emit('close')" class="w-full text-left px-4 py-3 text-sm rounded-md hover:bg-accent transition-colors flex items-center gap-3">
+        <button @click="emit('download', item.path, item.is_dir); emit('close')" class="w-full text-left px-4 py-3 text-sm rounded-md hover:bg-accent transition-colors flex items-center gap-3">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-5 w-5 text-muted-foreground"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-          다운로드
+          {{ item.is_dir ? 'ZIP 다운로드' : '다운로드' }}
         </button>
         <button v-if="!item.is_dir" @click="emit('share', item); emit('close')" class="w-full text-left px-4 py-3 text-sm rounded-md hover:bg-accent transition-colors flex items-center gap-3">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-5 w-5 text-muted-foreground"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>

@@ -139,7 +139,7 @@ export function useFiles() {
     await fetchFiles()
   }
 
-  async function downloadFile(path: string) {
+  async function downloadFile(path: string, isDir = false) {
     if (import.meta.client) {
       const config = useRuntimeConfig()
       if (config.public.demoMode) {
@@ -147,8 +147,32 @@ export function useFiles() {
         return
       }
     }
-    const url = `/api/files/download?path=${encodeURIComponent(path)}`
-    window.open(url, '_blank')
+    const endpoint = isDir ? '/api/files/download-zip' : '/api/files/download'
+    const url = `${endpoint}?path=${encodeURIComponent(path)}`
+    try {
+      const res = await fetch(url, { credentials: 'include' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: '다운로드 실패' }))
+        alert(err.detail || '다운로드 실패')
+        return
+      }
+      const blob = await res.blob()
+      const disposition = res.headers.get('content-disposition')
+      let filename = isDir ? 'download.zip' : path.split('/').pop() || 'download'
+      if (disposition) {
+        const match = disposition.match(/filename="?([^";\n]+)"?/)
+        if (match) filename = match[1]
+      }
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(a.href)
+    } catch {
+      alert('다운로드 중 오류가 발생했습니다.')
+    }
   }
 
   function getPreviewUrl(path: string) {

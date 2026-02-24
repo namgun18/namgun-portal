@@ -103,6 +103,40 @@ async def download_file(
     )
 
 
+# ─── Download folder as ZIP ───
+
+
+@router.get("/download-zip")
+async def download_zip(
+    path: str = Query(...),
+    user: User = Depends(get_current_user),
+):
+    real = _check_path(path, user)
+    if not real.is_dir():
+        raise HTTPException(status_code=400, detail="Not a directory")
+
+    import io
+    import zipfile
+
+    def _create_zip() -> bytes:
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for file_path in real.rglob("*"):
+                if file_path.is_file():
+                    arcname = str(file_path.relative_to(real))
+                    zf.write(file_path, arcname)
+        return buf.getvalue()
+
+    zip_bytes = await asyncio.to_thread(_create_zip)
+    zip_name = f"{real.name}.zip"
+
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_name}"'},
+    )
+
+
 # ─── Upload ───
 
 

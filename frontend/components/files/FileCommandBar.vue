@@ -5,7 +5,7 @@ const emit = defineEmits<{
   toggleSidebar: []
 }>()
 
-const { viewMode, selectedItems, deleteItems, downloadFile } = useFiles()
+const { viewMode, selectedItems, items, deleteItems, downloadFile } = useFiles()
 const showNewMenu = ref(false)
 
 function toggleView() {
@@ -20,7 +20,8 @@ async function handleDeleteSelected() {
 
 async function handleDownloadSelected() {
   for (const path of selectedItems.value) {
-    downloadFile(path)
+    const item = items.value.find(i => i.path === path)
+    downloadFile(path, item?.is_dir ?? false)
   }
 }
 </script>

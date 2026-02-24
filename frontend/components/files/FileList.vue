@@ -51,6 +51,10 @@ function handleContextMenu(e: MouseEvent, item: any) {
   emit('contextmenu', e, item)
 }
 
+function openActionMenu(e: MouseEvent, item: any) {
+  emit('contextmenu', e, item)
+}
+
 const isAllSelected = computed(() =>
   sortedItems.value.length > 0 && selectedItems.value.size === sortedItems.value.length
 )
@@ -107,6 +111,7 @@ const isAllSelected = computed(() =>
               </svg>
             </span>
           </th>
+          <th class="w-10" />
         </tr>
       </thead>
       <tbody>
@@ -114,8 +119,8 @@ const isAllSelected = computed(() =>
           v-for="item in sortedItems"
           :key="item.path"
           @click="handleClick(item)"
-          @contextmenu="handleContextMenu($event, item)"
-          class="border-b hover:bg-accent/50 cursor-pointer transition-colors"
+          @contextmenu.prevent="handleContextMenu($event, item)"
+          class="group border-b hover:bg-accent/50 cursor-pointer transition-colors"
           :class="selectedItems.has(item.path) ? 'bg-accent/30' : ''"
         >
           <td class="px-2 sm:px-3 py-2.5 sm:py-2" @click.stop>
@@ -146,6 +151,18 @@ const isAllSelected = computed(() =>
           </td>
           <td class="px-2 py-2.5 sm:py-2 text-muted-foreground hidden sm:table-cell">{{ formatDate(item.modified_at) }}</td>
           <td class="px-2 py-2.5 sm:py-2 text-muted-foreground hidden sm:table-cell">{{ item.is_dir ? '—' : formatSize(item.size) }}</td>
+          <td class="px-1 py-1" @click.stop>
+            <button
+              @click="openActionMenu($event, item)"
+              class="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent transition-colors opacity-0 group-hover:opacity-100"
+              :class="selectedItems.has(item.path) ? 'opacity-100' : ''"
+              title="더보기"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-4 w-4 text-muted-foreground">
+                <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
+              </svg>
+            </button>
+          </td>
         </tr>
       </tbody>
     </table>

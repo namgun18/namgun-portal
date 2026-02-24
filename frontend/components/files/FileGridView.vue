@@ -60,6 +60,16 @@ function formatSize(bytes: number): string {
           class="absolute top-2 left-2 z-10 rounded border-muted-foreground/30 opacity-0 group-hover:opacity-100 transition-opacity"
           :class="selectedItems.has(item.path) ? 'opacity-100' : ''"
         />
+        <!-- More actions button -->
+        <button
+          @click.stop="emit('contextmenu', $event, item)"
+          class="absolute top-1.5 right-1.5 z-10 h-6 w-6 flex items-center justify-center rounded-md bg-background/80 hover:bg-accent opacity-0 group-hover:opacity-100 transition-opacity"
+          title="더보기"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-3.5 w-3.5 text-muted-foreground">
+            <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
+          </svg>
+        </button>
 
         <!-- Preview area -->
         <div class="aspect-square flex items-center justify-center rounded bg-muted/30 mb-2 overflow-hidden">

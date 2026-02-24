@@ -82,7 +82,7 @@ function toggleDark() {
           </NuxtLink>
           <NuxtLink
             v-if="user.is_admin"
-            to="/admin/users"
+            to="/admin/dashboard"
             class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
             :class="route.path.startsWith('/admin') ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'"
           >
@@ -152,10 +152,10 @@ function toggleDark() {
             </NuxtLink>
             <NuxtLink
               v-if="user.is_admin"
-              to="/admin/users"
+              to="/admin/dashboard"
               class="block w-full px-3 py-2 text-sm text-left hover:bg-accent transition-colors"
             >
-              사용자 관리
+              관리 대시보드
             </NuxtLink>
             <button
               @click="logout"

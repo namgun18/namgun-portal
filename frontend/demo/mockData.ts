@@ -511,6 +511,190 @@ export const demoAdminUsers = [
   { id: 'user-003', username: 'younghee', display_name: '이영희', email: 'younghee@namgun.or.kr', is_active: true, is_admin: false, created_at: new Date(Date.now() - 864000000).toISOString() },
 ]
 
+// ─── Analytics (Admin Dashboard) ───
+
+function generateDailyVisits(days: number) {
+  const result = []
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000)
+    const total = 100 + Math.floor(Math.random() * 200)
+    const auth = Math.floor(total * (0.7 + Math.random() * 0.2))
+    result.push({
+      date: d.toISOString().split('T')[0],
+      total,
+      authenticated: auth,
+      unauthenticated: total - auth,
+    })
+  }
+  return result
+}
+
+const demoAnalyticsOverview = {
+  total_visits: 1247,
+  unique_ips: 89,
+  authenticated_visits: 1105,
+  unauthenticated_visits: 142,
+  avg_response_time_ms: 45,
+}
+
+const demoDailyVisits = generateDailyVisits(30)
+
+const demoTopPages = [
+  { path: '/api/mail/messages', count: 342 },
+  { path: '/api/auth/me', count: 289 },
+  { path: '/api/calendar/events', count: 178 },
+  { path: '/api/mail/mailboxes', count: 156 },
+  { path: '/api/files/list', count: 134 },
+  { path: '/api/contacts/', count: 98 },
+  { path: '/api/git/repos', count: 87 },
+  { path: '/api/services/status', count: 76 },
+  { path: '/api/meetings', count: 54 },
+  { path: '/api/admin/users', count: 32 },
+]
+
+const demoCountries = [
+  { country_code: 'KR', country_name: '대한민국', count: 1089 },
+  { country_code: 'US', country_name: '미국', count: 67 },
+  { country_code: 'JP', country_name: '일본', count: 34 },
+  { country_code: 'DE', country_name: '독일', count: 21 },
+  { country_code: 'SG', country_name: '싱가포르', count: 18 },
+  { country_code: 'CN', country_name: '중국', count: 12 },
+]
+
+const demoServiceUsage = [
+  { service: 'mail', count: 456 },
+  { service: 'calendar', count: 234 },
+  { service: 'files', count: 189 },
+  { service: 'auth', count: 167 },
+  { service: 'contacts', count: 98 },
+  { service: 'git', count: 87 },
+  { service: 'meetings', count: 54 },
+  { service: 'admin', count: 32 },
+]
+
+const demoActiveUsers = [
+  {
+    user_id: 'demo-user-001', username: 'demo', display_name: '데모 사용자',
+    path: '/api/mail/messages', ip_address: '211.244.144.10', country_code: 'KR',
+    last_seen: new Date(Date.now() - 60000).toISOString(),
+  },
+  {
+    user_id: 'user-002', username: 'cheolsu', display_name: '김철수',
+    path: '/api/calendar/events', ip_address: '211.244.144.11', country_code: 'KR',
+    last_seen: new Date(Date.now() - 180000).toISOString(),
+  },
+  {
+    user_id: 'user-003', username: 'younghee', display_name: '이영희',
+    path: '/api/files/list', ip_address: '203.130.45.67', country_code: 'KR',
+    last_seen: new Date(Date.now() - 240000).toISOString(),
+  },
+]
+
+const demoRecentLogins = [
+  {
+    user_id: 'demo-user-001', username: 'demo', display_name: '데모 사용자',
+    ip_address: '211.244.144.10', country_code: 'KR', country_name: '대한민국',
+    login_at: new Date(Date.now() - 1800000).toISOString(),
+  },
+  {
+    user_id: 'user-002', username: 'cheolsu', display_name: '김철수',
+    ip_address: '211.244.144.11', country_code: 'KR', country_name: '대한민국',
+    login_at: new Date(Date.now() - 7200000).toISOString(),
+  },
+  {
+    user_id: 'user-003', username: 'younghee', display_name: '이영희',
+    ip_address: '203.130.45.67', country_code: 'KR', country_name: '대한민국',
+    login_at: new Date(Date.now() - 14400000).toISOString(),
+  },
+  {
+    user_id: 'demo-user-001', username: 'demo', display_name: '데모 사용자',
+    ip_address: '68.45.123.89', country_code: 'US', country_name: '미국',
+    login_at: new Date(Date.now() - 86400000).toISOString(),
+  },
+  {
+    user_id: 'user-002', username: 'cheolsu', display_name: '김철수',
+    ip_address: '211.244.144.11', country_code: 'KR', country_name: '대한민국',
+    login_at: new Date(Date.now() - 172800000).toISOString(),
+  },
+]
+
+function generateAccessLogs(): any {
+  const paths = ['/api/mail/messages', '/api/auth/me', '/api/calendar/events', '/api/files/list', '/api/contacts/', '/api/git/repos']
+  const browsers = ['Chrome', 'Firefox', 'Safari', 'Edge', null]
+  const oses = ['Windows 10+', 'macOS', 'Linux', 'Android', 'iOS']
+  const users = [
+    { id: 'demo-user-001', username: 'demo' },
+    { id: 'user-002', username: 'cheolsu' },
+    { id: 'user-003', username: 'younghee' },
+    { id: null, username: null },
+  ]
+  const logs = []
+  for (let i = 0; i < 50; i++) {
+    const u = users[Math.floor(Math.random() * users.length)]
+    const p = paths[Math.floor(Math.random() * paths.length)]
+    logs.push({
+      id: `log-${String(i).padStart(3, '0')}`,
+      ip_address: `211.244.144.${Math.floor(Math.random() * 255)}`,
+      method: 'GET',
+      path: p,
+      status_code: Math.random() > 0.05 ? 200 : 404,
+      response_time_ms: 10 + Math.floor(Math.random() * 200),
+      browser: browsers[Math.floor(Math.random() * browsers.length)],
+      os: oses[Math.floor(Math.random() * oses.length)],
+      device: 'Desktop',
+      country_code: 'KR',
+      country_name: '대한민국',
+      user_id: u.id,
+      username: u.username,
+      service: p.split('/')[2] || null,
+      created_at: new Date(Date.now() - i * 120000).toISOString(),
+    })
+  }
+  return { logs, total: 1247, page: 1, limit: 50 }
+}
+
+const demoAccessLogs = generateAccessLogs()
+
+const demoGitActivity = [
+  {
+    repo_name: 'namgun-portal', repo_full_name: 'namgun/namgun-portal',
+    event_type: 'push', title: '관리자 대시보드 추가',
+    user: 'demo', created_at: new Date(Date.now() - 3600000).toISOString(),
+  },
+  {
+    repo_name: 'namgun-portal', repo_full_name: 'namgun/namgun-portal',
+    event_type: 'issue', title: 'GeoIP DB 자동 업데이트 구현',
+    user: 'cheolsu', created_at: new Date(Date.now() - 7200000).toISOString(),
+  },
+  {
+    repo_name: 'game-panel', repo_full_name: 'namgun/game-panel',
+    event_type: 'push', title: 'v0.6.2 포트 헬스체크 버그 수정',
+    user: 'demo', created_at: new Date(Date.now() - 14400000).toISOString(),
+  },
+  {
+    repo_name: 'namgun-portal', repo_full_name: 'namgun/namgun-portal',
+    event_type: 'pull_request', title: '캘린더 공유 기능',
+    user: 'younghee', created_at: new Date(Date.now() - 28800000).toISOString(),
+  },
+  {
+    repo_name: 'game-panel', repo_full_name: 'namgun/game-panel',
+    event_type: 'issue', title: 'Palworld 서버 재시작 실패',
+    user: 'cheolsu', created_at: new Date(Date.now() - 43200000).toISOString(),
+  },
+  {
+    repo_name: 'infra-configs', repo_full_name: 'namgun/infra-configs',
+    event_type: 'push', title: 'Nginx SSL 갱신',
+    user: 'demo', created_at: new Date(Date.now() - 86400000).toISOString(),
+  },
+]
+
+const demoGitStats = {
+  total_repos: 3,
+  total_users: 2,
+  total_issues: 4,
+  total_pulls: 1,
+}
+
 // ─── Route → Mock Response Map ───
 
 export function getMockResponse(method: string, path: string, query?: Record<string, string>): any {
@@ -588,6 +772,21 @@ export function getMockResponse(method: string, path: string, query?: Record<str
   // Admin
   if (path === '/api/admin/users/pending') return []
   if (path === '/api/admin/users') return demoAdminUsers
+
+  // Admin Analytics
+  if (path === '/api/admin/analytics/overview') return demoAnalyticsOverview
+  if (path === '/api/admin/analytics/daily-visits') {
+    const days = parseInt(query?.days || '30')
+    return generateDailyVisits(days)
+  }
+  if (path === '/api/admin/analytics/top-pages') return demoTopPages
+  if (path === '/api/admin/analytics/countries') return demoCountries
+  if (path === '/api/admin/analytics/service-usage') return demoServiceUsage
+  if (path === '/api/admin/analytics/active-users') return demoActiveUsers
+  if (path === '/api/admin/analytics/recent-logins') return demoRecentLogins
+  if (path === '/api/admin/analytics/access-logs') return demoAccessLogs
+  if (path === '/api/admin/analytics/git-activity') return demoGitActivity
+  if (path === '/api/admin/analytics/git-stats') return demoGitStats
 
   // Health
   if (path === '/api/health') return { status: 'ok', service: 'demo', version: '0.7.0' }

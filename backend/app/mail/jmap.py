@@ -1,9 +1,11 @@
 """JMAP client for Stalwart Mail Server."""
 
+import logging
 import httpx
 
 from app.config import get_settings
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 _client: httpx.AsyncClient | None = None
@@ -24,7 +26,6 @@ def _get_client() -> httpx.AsyncClient:
 # ─── Account ID cache (email → JMAP account ID) ───
 
 _account_cache: dict[str, str] = {}
-_jmap_offset: int | None = None  # principal_id + offset = JMAP document ID
 
 
 async def get_session() -> dict:
@@ -35,86 +36,53 @@ async def get_session() -> dict:
     return resp.json()
 
 
-async def _discover_jmap_offset(client) -> int:
-    """Discover the offset between admin API principal IDs and JMAP account IDs.
+def _encode_account_id(principal_id: int) -> str:
+    """Encode principal_id to Stalwart JMAP accountId (bijective base-26).
 
-    Stalwart stores JMAP accounts as RocksDB documents with sequential IDs.
-    The offset = (JMAP document ID) - (principal ID) is fixed per installation.
-    We discover it by scanning a range of JMAP accountIds to find one with data.
+    Stalwart uses: a=0, b=1, ..., z=25, aa=26, ab=27, ...
     """
-    global _jmap_offset
-    if _jmap_offset is not None:
-        return _jmap_offset
-
-    # Get principals with known data (non-zero quota)
-    resp = await client.get("/api/principal", params={"types": "individual", "limit": 100})
-    resp.raise_for_status()
-    principals = resp.json().get("data", {}).get("items", [])
-
-    # Find a principal with usedQuota > 0 to use as reference
-    ref = None
-    for p in principals:
-        if p.get("usedQuota", 0) > 0:
-            ref = p
+    if principal_id < 26:
+        return chr(ord("a") + principal_id)
+    result = ""
+    n = principal_id
+    while n >= 0:
+        result = chr(ord("a") + (n % 26)) + result
+        n = n // 26 - 1
+        if n < 0:
             break
-
-    if not ref:
-        # No principal with data — use default offset of 10
-        _jmap_offset = 10
-        return _jmap_offset
-
-    ref_pid = ref["id"]
-
-    # Scan offsets 0-20 to find the one that yields emails
-    for offset in range(0, 30):
-        jmap_id = format(ref_pid + offset, "x")
-        try:
-            body = {
-                "using": ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"],
-                "methodCalls": [
-                    ["Email/query", {"accountId": jmap_id, "calculateTotal": True, "limit": 0}, "q0"],
-                ],
-            }
-            r = await client.post("/jmap", json=body)
-            if r.status_code != 200:
-                continue
-            result = r.json()
-            for mr in result.get("methodResponses", []):
-                if mr[0] == "Email/query" and mr[1].get("total", 0) > 0:
-                    _jmap_offset = offset
-                    return _jmap_offset
-        except Exception:
-            continue
-
-    # Fallback
-    _jmap_offset = 10
-    return _jmap_offset
+    return result
 
 
 async def resolve_account_id(email: str) -> str | None:
     """Resolve email to Stalwart JMAP account ID.
 
-    Admin API principal IDs differ from JMAP account IDs.
-    JMAP accountId = hex(principal_id + offset) where offset is installation-specific.
+    Uses Admin API to get principal_id, then encodes with bijective base-26.
     """
     if email in _account_cache:
         return _account_cache[email]
 
     client = _get_client()
 
-    # Discover offset if not yet known
-    offset = await _discover_jmap_offset(client)
-
-    # Get all principals and build cache
-    resp = await client.get("/api/principal", params={"types": "individual", "limit": 100})
-    resp.raise_for_status()
-    data = resp.json()
+    # Get all principals and build cache (retry once on failure)
+    data = {}
+    for attempt in range(2):
+        try:
+            resp = await client.get("/api/principal", params={"types": "individual", "limit": 0})
+            resp.raise_for_status()
+            data = resp.json()
+            break
+        except (httpx.HTTPError, httpx.TimeoutException) as e:
+            logger.warning("Stalwart principal API failed (attempt %d): %s", attempt + 1, e)
+            if attempt == 1:
+                raise
+            _reconnect()
+            client = _get_client()
 
     for item in data.get("data", {}).get("items", []):
         emails = item.get("emails", [])
         name = item.get("name", "")
         principal_id = item.get("id", 0)
-        jmap_id = format(principal_id + offset, "x")
+        jmap_id = _encode_account_id(principal_id)
         for e in emails:
             _account_cache[e] = jmap_id
         _account_cache[name] = jmap_id
@@ -123,14 +91,32 @@ async def resolve_account_id(email: str) -> str | None:
     if email in _account_cache:
         return _account_cache[email]
 
-    # Try username part (before @) — only if email has valid format
+    # Try username part (before @)
     if "@" in email:
         username = email.split("@")[0]
         if username and username in _account_cache:
             _account_cache[email] = _account_cache[username]
             return _account_cache[email]
 
+    logger.warning("Mail account not found for: %s", email)
     return None
+
+
+def _reconnect():
+    """Force reconnect on next call."""
+    global _client
+    if _client and not _client.is_closed:
+        try:
+            import asyncio
+            asyncio.get_event_loop().create_task(_client.aclose())
+        except Exception:
+            pass
+    _client = None
+
+
+def clear_cache():
+    """Clear account cache (useful after Stalwart restart)."""
+    _account_cache.clear()
 
 
 # ─── Generic JMAP call ───
@@ -158,15 +144,39 @@ async def jmap_call(
     account_id: str | None = None,
     using: list[str] | None = None,
 ) -> dict:
-    """POST /jmap with JMAP method calls."""
-    client = _get_client()
+    """POST /jmap with JMAP method calls (retry once on connection error)."""
     body = {
         "using": using or USING_MAIL,
         "methodCalls": method_calls,
     }
-    resp = await client.post("/jmap", json=body)
-    resp.raise_for_status()
-    return resp.json()
+    for attempt in range(2):
+        try:
+            client = _get_client()
+            resp = await client.post("/jmap", json=body)
+            resp.raise_for_status()
+            return resp.json()
+        except (httpx.ConnectError, httpx.ReadError, httpx.WriteError) as e:
+            logger.warning("JMAP call failed (attempt %d): %s", attempt + 1, e)
+            if attempt == 1:
+                raise
+            _reconnect()
+    raise httpx.ConnectError("JMAP call failed after retries")
+
+
+# ─── Identities ───
+
+
+async def get_identity_id(account_id: str) -> str | None:
+    """Get the first (primary) identity ID for an account."""
+    result = await jmap_call([
+        ["Identity/get", {"accountId": account_id}, "i0"],
+    ])
+    for resp in result.get("methodResponses", []):
+        if resp[0] == "Identity/get":
+            ids = resp[1].get("list", [])
+            if ids:
+                return ids[0]["id"]
+    return None
 
 
 # ─── Mailboxes ───
@@ -341,6 +351,12 @@ async def send_message(
     attachments: list[dict] | None = None,
 ) -> dict | None:
     """Create and send an email in one JMAP call."""
+    # Resolve identity (required by Stalwart for EmailSubmission)
+    identity_id = await get_identity_id(account_id)
+    if not identity_id:
+        logger.error("No identity found for account %s", account_id)
+        return None
+
     body_values = {"text": {"value": text_body}}
     if html_body:
         body_values["html"] = {"value": html_body}
@@ -424,6 +440,7 @@ async def send_message(
                 "create": {
                     "sendIt": {
                         "emailId": "#draft",
+                        "identityId": identity_id,
                         "envelope": None,
                     },
                 },
@@ -432,12 +449,40 @@ async def send_message(
         ],
     ])
 
+    email_created = None
+    submission_ok = False
+
     for resp in result.get("methodResponses", []):
         if resp[0] == "Email/set":
             created = resp[1].get("created", {})
+            not_created = resp[1].get("notCreated", {})
             if "draft" in created:
-                return created["draft"]
-    return None
+                email_created = created["draft"]
+            if not_created:
+                logger.error("Email/set notCreated: %s", not_created)
+                return None
+        elif resp[0] == "EmailSubmission/set":
+            created = resp[1].get("created", {})
+            not_created = resp[1].get("notCreated", {})
+            if "sendIt" in created:
+                submission_ok = True
+            if not_created:
+                logger.error("EmailSubmission/set notCreated: %s", not_created)
+        elif resp[0] == "error":
+            logger.error("JMAP error in send_message: %s", resp[1])
+            return None
+
+    if not email_created:
+        logger.error("Email/set did not create draft. Full response: %s", result)
+        return None
+
+    if not submission_ok:
+        logger.error(
+            "EmailSubmission/set failed. Email created but not submitted. "
+            "Full response: %s", result
+        )
+
+    return email_created
 
 
 # ─── Bulk operations ───

@@ -52,8 +52,8 @@ async function initCytoscape() {
           'border-width': 2,
           'width': 48,
           'height': 48,
-          'text-wrap': 'ellipsis',
-          'text-max-width': 80,
+          'text-wrap': 'wrap',
+          'text-max-width': 140,
         },
       },
       {
@@ -130,9 +130,9 @@ function renderGraph() {
   cy.layout({
     name: 'dagre',
     rankDir: 'TB',
-    nodeSep: 60,
-    rankSep: 80,
-    padding: 30,
+    nodeSep: 100,
+    rankSep: 100,
+    padding: 40,
   }).run()
 
   cy.fit(undefined, 40)

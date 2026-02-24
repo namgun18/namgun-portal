@@ -22,6 +22,9 @@
 | v1.9 | 2026-02-22 | 남기완 | Stalwart + LDAP Outpost 네이티브 마이그레이션 (Podman → systemd) |
 | v2.0 | 2026-02-22 | 남기완 | **v1.0.0 정식 릴리즈** — SELinux Enforcing, 잔여 작업 정리, WSL Docker 포트 자동복구 |
 | v2.1 | 2026-02-23 | 남기완 | Phase 16: 보안 취약점 감사 및 수정 (Critical 4건 + High 4건 + Medium 9건) |
+| v2.2 | 2026-02-23 | 남기완 | Phase 17: JMAP 계정 매핑 버그 수정, 관리자 가입 알림, Lab UI 수정, SMTP 대안 조사 |
+| v2.3 | 2026-02-23 | 남기완 | Phase 17 확장: 메일 전수 감사, JMAP EmailSubmission identityId 수정, 워치독 연쇄 재시작 해결 |
+| v2.4 | 2026-02-24 | 남기완 | Phase 18: 관리 대시보드 — 방문자 분석 + 서비스 현황 모니터링 (v1.1.0) |
 
 ---
 
@@ -60,6 +63,8 @@ namgun.or.kr 종합 포털은 가정 및 소규모 조직을 위한 셀프 호�
 | Phase 14 | UI 개선 및 SSR 인증 수정 | **완료** | — | Lab 좌우 분할·리사이즈, 메일 팝업 작성·서명 선택, SSR 쿠키 전달, Nginx 캐시 제어 (v0.6.1) |
 | Phase 15 | 캘린더/연락처 + 데모 사이트 | **완료** | — | JMAP 캘린더/연락처, 캘린더 공유, CalDAV/CardDAV, demo.namgun.or.kr (v0.7.0 → v0.7.1) |
 | Phase 16 | 보안 취약점 감사 및 수정 | **완료** | — | 전체 코드 보안 감사, Critical 4건 + High 4건 + Medium 9건 수정, Rate Limiting 도입 |
+| Phase 17 | 메일 시스템 버그 수정 및 안정화 | **완료** | — | JMAP base-26 버그, 관리자 알림, EmailSubmission identityId, 전수 감사(C4+H5), 워치독 연쇄 재시작 해결 |
+| Phase 18 | 관리 대시보드 — 방문자 분석 + 서비스 모니터링 | **완료** | — | AccessLog 미들웨어, GeoIP, Chart.js, 10개 분석 엔드포인트, 데모 mock (v1.1.0) |
 
 ---
 
@@ -1627,6 +1632,200 @@ location = /.well-known/carddav { return 301 /dav/; }
 
 ---
 
+## 20.7. Phase 17: 메일 시스템 버그 수정 및 안정화 (완료, 2026-02-23)
+
+### 20.7.1 JMAP 계정 ID 매핑 버그 수정 (Critical)
+
+Stalwart Mail Server의 JMAP accountId 인코딩 방식을 잘못 구현하여, **일부 사용자의 메일 기능이 완전히 불능**이었던 버그를 수정하였다.
+
+**원인 분석:**
+
+Stalwart는 JMAP accountId로 **bijective base-26 인코딩**(`a=0, b=1, ..., z=25, aa=26, ...`)을 사용한다. 기존 코드는 `hex(principal_id + offset)` 방식으로 계산하고 있었다.
+
+| 사용자 | PID | 기존 코드 `hex(pid+10)` | 실제 (base-26) | 일치? |
+|--------|-----|----------------------|---------------|-------|
+| namgun18 | 2 | `c` | `c` | O (우연) |
+| tsha | 3 | `d` | `d` | O (우연) |
+| nahee14 | 5 | `f` | `f` | O (우연) |
+| **kkb** | **6** | **`10`** | **`g`** | **X** |
+| **noreply** | **9** | **`13`** | **`j`** | **X** |
+| **ysj7705** | **14** | **`18`** | **`o`** | **X** |
+
+PID 2~5에서만 우연히 일치한 이유: hex 숫자 `a-f`와 base-26 문자 `a-f`가 동일하고, offset 10을 더하면 PID 2→hex(12)=`c`, PID 5→hex(15)=`f`로 같은 문자가 출력됨. PID 6부터는 hex(16)=`10`(두 글자)이 되어 완전히 어긋남.
+
+**수정 내용:**
+
+| 항목 | 이전 | 이후 |
+|------|------|------|
+| 인코딩 | `format(principal_id + offset, "x")` (hex) | `_encode_account_id()` (bijective base-26) |
+| offset 탐색 | `_discover_jmap_offset()` 함수 (스캔 방식) | **삭제** (불필요) |
+| 캐시 | `_jmap_offset` 전역 변수 | **삭제** |
+
+**수정 파일:** `backend/app/mail/jmap.py`
+
+### 20.7.2 관리자 가입 알림 메일 추가
+
+새 사용자가 회원가입 신청 시, 관리자 이메일(namgun18@namgun.or.kr)로 알림 메일이 발송되도록 구현하였다.
+
+| 항목 | 내용 |
+|------|------|
+| 트리거 | `POST /api/auth/register` 성공 시 |
+| 수신자 | `ADMIN_EMAILS` 환경변수 (쉼표 구분, 복수 가능) |
+| 내용 | 사용자명, 표시이름, 포털 메일, 복구 이메일, 관리 페이지 링크 |
+| 실패 처리 | 알림 실패해도 회원가입 자체는 정상 진행 |
+
+**수정 파일:**
+- `backend/app/config.py` — `admin_emails` 설정 추가
+- `backend/app/auth/router.py` — `_send_admin_registration_notify()` 함수 추가
+- `.env` — `ADMIN_EMAILS=namgun18@namgun.or.kr` 추가
+
+### 20.7.3 Lab UI 수정 (2건)
+
+| 문제 | 원인 | 수정 |
+|------|------|------|
+| 템플릿 드롭다운 안 보임 | 카드 컨테이너의 `overflow-hidden`이 absolute 드롭다운을 클리핑 | 카드에서 `overflow-hidden` 제거, editor+output 영역에만 적용 |
+| 토폴로지 노드 이름 짤림/겹침 | `text-wrap: 'ellipsis'`, `text-max-width: 80`, `nodeSep: 60` 부족 | `text-wrap: 'wrap'`, `text-max-width: 140`, `nodeSep: 100`, `rankSep: 100` |
+
+**수정 파일:**
+- `frontend/components/lab/LabTerraform.vue`
+- `frontend/components/lab/LabTopology.vue`
+
+### 20.7.4 메일 오류 처리 개선
+
+| 항목 | 수정 내용 |
+|------|----------|
+| JMAP 연결 재시도 | `jmap_call()`에 ConnectError/ReadError/WriteError 시 1회 재시도 + 자동 재연결 |
+| 계정 해석 재시도 | `resolve_account_id()`에 HTTP 오류 시 1회 재시도 |
+| 오류 메시지 개선 | 502: "메일 서버에 연결할 수 없습니다", 404: "메일 계정을 찾을 수 없습니다 ({email})" |
+
+**수정 파일:** `backend/app/mail/jmap.py`, `backend/app/mail/router.py`
+
+### 20.7.5 사용자 승인 시 메일함 자동 생성
+
+Stalwart LDAP 디렉토리는 읽기 전용이어서 Admin API로 principal을 생성할 수 없다. 관리자가 사용자를 승인하면 Welcome 메일을 발송하여 Stalwart가 메일함을 자동 생성하도록 하였다.
+
+**플로우:**
+1. 관리자가 `/api/admin/users/{id}/approve` 호출
+2. Authentik에서 사용자 활성화
+3. Welcome 메일 발송 (SMTP) → Stalwart가 수신 시 principal 자동 생성
+4. JMAP 계정 생성 대기 (최대 5회, 2초 간격)
+5. 메일함 준비 완료 메시지 반환
+
+**수정 파일:** `backend/app/admin/router.py`
+
+### 20.7.6 SMTP 대안 조사 (참고)
+
+Stalwart 안정성 우려로 대안 메일 서버를 조사하였다.
+
+| 순위 | 옵션 | LDAP | JMAP | 안정성 | 판정 |
+|------|------|------|------|--------|------|
+| 1 | **Stalwart 유지 (인프라 안정화)** | O | O | 중 | **현재 선택** — 불안정 원인은 LDAP outpost/컨테이너 런타임이지 Stalwart 자체 아님 |
+| 2 | docker-mailserver (Postfix+Dovecot) | O | X | 상 | 최선의 대안 — JMAP 없어 포털 IMAP 전환 필요 |
+| 3 | Apache James | O | O | 중 | JVM 기반, 커뮤니티 작음 |
+| — | mailcow | △ (nightly) | X | 상 | LDAP 미안정, 리소스 과다 (6-8GB) |
+| — | Mailu | X | X | 중 | LDAP 미지원 (탈락) |
+| — | iRedMail | △ (자체 LDAP) | X | 상 | Authentik 연동 어려움 |
+| — | Maddy | O | X | 중 | API 전무, 포털 연동 난이도 높음 |
+| — | Exchange Server | O (AD 필수) | X | 상 | 별도 라이선스 필요 (~$1,900), AD 인프라 필요, 10명 규모 과잉 |
+
+**결론:** 네이티브 전환 완료 + base-26 버그 수정으로 핵심 문제 해결. 당분간 Stalwart 유지하며 안정성 모니터링.
+
+### 20.7.7 메일 코드 전수 감사 및 수정
+
+메일 관련 전체 코드를 1줄 단위로 감사하여 Critical 4건, High 5건, Medium 13건의 이슈를 발견·수정하였다.
+
+**Critical (즉시 수정 — 서비스 장애 유발):**
+
+| # | 파일 | 문제 | 수정 |
+|---|------|------|------|
+| 1 | `auth/router.py` `_send_verify_email()` | `smtplib.SMTP`(블로킹 I/O)를 `async def`에서 직접 호출 → FastAPI 이벤트 루프 전체 차단 | `asyncio.to_thread(_smtp_send, msg)` 래핑 |
+| 2 | `auth/router.py` `_send_recovery_email()` | 동일 — 블로킹 SMTP | `asyncio.to_thread()` 래핑 |
+| 3 | `auth/router.py` `_send_admin_registration_notify()` | 동일 — 블로킹 SMTP | `asyncio.to_thread()` 래핑 |
+| 4 | `admin/router.py` `_send_welcome_email()` | 동일 — 블로킹 SMTP | `asyncio.to_thread()` 래핑 |
+
+**High (운영 영향):**
+
+| # | 파일 | 문제 | 수정 |
+|---|------|------|------|
+| 5 | `mail/jmap.py` `resolve_account_id()` | `data` 변수 미초기화 시 `UnboundLocalError` | `data = {}` 초기화 |
+| 6 | `mail/jmap.py` `resolve_account_id()` | principal 조회 `limit: 100` → 100명 초과 시 누락 | `limit: 0` (무제한) |
+| 7 | `mail/router.py` `upload_attachment()` | `file.read()` 무제한 → 메모리 고갈 DoS | `file.read(max_size + 1)` + 크기 검증 |
+| 8 | `mail/jmap.py` `send_message()` | `mailboxIds` 미지정 시 Stalwart 거부 ("at least one mailbox") | Sent → Drafts → 첫 메일함 순 폴백 |
+| 9 | `composables/useMail.ts` | `window.addEventListener('message')` 중복 등록 (컴포저블 재호출마다) | 모듈 레벨 `_listenerRegistered` 플래그 |
+
+**수정 파일:**
+- `backend/app/auth/router.py` — `_smtp_send()` 공통 헬퍼 추출 + `asyncio.to_thread()` 래핑
+- `backend/app/admin/router.py` — `_send_welcome_email()` 동일 래핑
+- `backend/app/mail/jmap.py` — `data` 초기화, `limit: 0`, `mailboxIds` 폴백
+- `backend/app/mail/router.py` — 업로드 크기 제한
+- `frontend/composables/useMail.ts` — 리스너 중복 등록 방지
+
+### 20.7.8 JMAP EmailSubmission identityId 누락 수정 (Critical — 발송 불능 근본 원인)
+
+포털에서 메일 발송 시 JMAP `EmailSubmission/set` 호출에 **`identityId` 필드가 누락**되어, Stalwart가 `"emailId and identityId properties are required."` 에러를 반환하고 있었다. 그러나 기존 코드는 `Email/set` (초안 생성) 성공만 확인하고 `EmailSubmission/set` 응답을 전혀 체크하지 않아 **200 OK를 반환하면서 실제로는 한 통도 발송되지 않는** 상태였다.
+
+**원인 분석:**
+
+```
+JMAP 호출 구조:
+  1) Email/set → 이메일 초안 생성 → ✅ 성공 (Sent 폴더에 저장)
+  2) EmailSubmission/set → 실제 발송 → ❌ 실패 (identityId 누락)
+     → notCreated: {"sendIt": {"type": "invalidProperties", ...}}
+
+코드 결과 확인:
+  for resp in result["methodResponses"]:
+      if resp[0] == "Email/set":     ← Email/set만 체크
+          return resp[1]["created"]   ← 200 OK 반환 (실제 미발송)
+  # EmailSubmission/set 응답은 완전히 무시됨
+```
+
+**수정 내용:**
+
+| 항목 | 이전 | 이후 |
+|------|------|------|
+| Identity 조회 | 없음 | `get_identity_id()` 함수 추가 (`Identity/get` JMAP 호출) |
+| EmailSubmission | `identityId` 없음 | `identityId: identity_id` 포함 |
+| 에러 체크 | `Email/set` created만 확인 | `EmailSubmission/set` created/notCreated 모두 확인 |
+| 로깅 | 없음 | `Email/set`, `EmailSubmission/set` 실패 시 에러 로그 |
+
+**수정 파일:** `backend/app/mail/jmap.py`
+
+### 20.7.9 워치독 연쇄 재시작 문제 해결 (Stalwart 안정성)
+
+Stalwart가 5분(워치독 v2 적용 전 2분)마다 반복적으로 재시작되어 메일 수발신이 불가능했던 문제를 해결하였다.
+
+**원인 분석 (2중 문제):**
+
+1. **워치독 false-positive**: LDAP outpost가 정상 작동 중이었으나 워치독의 포트 체크 타이밍 문제로 매번 "down"으로 판정하여 재시작 트리거
+2. **systemd 의존성 연쇄**: `stalwart-mail.service`에 `Requires=authentik-ldap-outpost.service` 설정이 있어, 워치독이 LDAP outpost만 재시작해도 systemd가 **Stalwart까지 연쇄 재시작**
+
+```
+워치독 실행 → LDAP "down" 판정 → systemctl restart authentik-ldap-outpost
+                                      ↓ (Requires= 의존성)
+                              systemd가 stalwart-mail도 자동 재시작
+                                      ↓
+                              메일 서비스 중단 (수발신 불가)
+```
+
+하루 550회 이상 재시작이 발생하여 사실상 메일 서비스가 정상 운영된 적이 없었다.
+
+**수정 내용:**
+
+| 항목 | 이전 | 이후 |
+|------|------|------|
+| systemd 의존성 | `Requires=authentik-ldap-outpost.service` | `Wants=authentik-ldap-outpost.service` (연쇄 재시작 방지) |
+| 워치독 Stalwart 재시작 | 매번 LDAP + Stalwart 동시 재시작 | LDAP outpost만 재시작 (Stalwart 미접촉) |
+| 워치독 실행 간격 | `*/2` (2분) | `*/5` (5분) |
+| 동시 실행 방지 | 없음 | lockfile (`/tmp/ldap-watchdog.lock`) |
+| 재시작 쿨다운 | 없음 | 3분 이내 재시작 스킵 (`ActiveEnterTimestamp` 확인) |
+| 재시작 후 검증 | 30초 (6×5s) | 60초 (12×5s) |
+
+**수정 파일:**
+- `/etc/systemd/system/stalwart-mail.service` (192.168.0.250) — `Requires` → `Wants`
+- `/home/namgun/stalwart/ldap-watchdog.sh` (192.168.0.250) — 워치독 v2
+
+---
+
 ## 21. 핵심 트러블슈팅 정리
 
 | # | 문제 | 원인 | 해결 방법 |
@@ -1662,6 +1861,12 @@ location = /.well-known/carddav { return 301 /dav/; }
 | 29 | 데모 사이트 파일 다운로드 시 `undefined` 페이지 열림 | `window.open(url)`이 데모 미들웨어의 mock JSON을 표시 | 클라이언트에서 데모 모드 감지 후 `alert()` 차단 + 서버에서 `__DEMO_BLOCK__` → 403 반환 |
 | 30 | 본서버 SSR 하이드레이션 오류 (`nextSibling is null`) | `useColorMode()` `v-if`가 SSR(light 폴백)/클라이언트(OS 감지) 간 SVG 아이콘 불일치; `new Date()`가 Docker(UTC)/브라우저(KST) 시간대 차이로 DOM 불일치 | colorMode → `<ClientOnly>`, DashboardGreeting → `onMounted` 초기화, 캘린더 → `<ClientOnly>` 래퍼 |
 | 31 | 연락처 목록 500 에러 | Stalwart가 `ContactCard/query`의 `name/full` 정렬 미지원 + `"filter": null` JSON 파싱 거부 | `sort` 제거, 빈 필터 시 `filter` 키 생략 |
+| 32 | PID 6+ 사용자 메일 기능 불능 (ysj7705, kkb, noreply 등) | JMAP accountId를 `hex(pid+offset)`으로 계산했으나, Stalwart는 bijective base-26 인코딩 사용. PID 2~5만 우연히 일치 | `_encode_account_id()` base-26 인코딩 함수 구현, offset 탐색 로직 전체 제거 |
+| 33 | 신규 사용자 승인 후 메일함 없음 | Stalwart LDAP 디렉토리는 읽기 전용, Admin API로 principal 생성 불가 | 승인 시 Welcome 메일 발송하여 Stalwart가 수신 시 자동 principal 생성 유도 |
+| 34 | Lab 템플릿 드롭다운 안 보임 | 부모 카드의 `overflow-hidden`이 absolute 위치 드롭다운 클리핑 | 카드에서 `overflow-hidden` 제거, editor+output 영역에만 적용 |
+| 35 | 포털 메일 발송 200 OK이나 실제 미발송 | JMAP `EmailSubmission/set`에 `identityId` 필드 누락 → Stalwart `notCreated` 반환하나 코드가 `Email/set` 성공만 확인 | `get_identity_id()` 함수 추가, `identityId` 포함, `EmailSubmission/set` 응답 에러 체크 |
+| 36 | Stalwart 2~5분마다 반복 재시작 (하루 550회+) | `stalwart-mail.service`의 `Requires=authentik-ldap-outpost.service` 의존성 + 워치독 LDAP 재시작 → systemd 연쇄 재시작 | `Requires=` → `Wants=` 변경, 워치독 v2 (lockfile, cooldown, Stalwart 미접촉) |
+| 37 | `smtplib.SMTP`가 FastAPI 이벤트 루프 차단 | 블로킹 SMTP 호출을 `async def`에서 직접 실행 → 전체 서버 응답 지연 | `asyncio.to_thread()` 래핑으로 별도 스레드 실행 |
 
 ---
 
@@ -1744,6 +1949,18 @@ location = /.well-known/carddav { return 301 /dav/; }
 | SSR 하이드레이션 오류 근본 해결 (colorMode, Date 시간대) | Phase 15 (v0.7.1) |
 | JMAP 연락처 `unsupportedSort` + `filter: null` 수정 | Phase 15 (v0.7.1) |
 | 전체 코드 보안 감사 (Critical 4 + High 4 + Medium 9) | Phase 16 |
+| JMAP 계정 ID 매핑 버그 수정 (base-26 인코딩) | Phase 17 |
+| 관리자 가입 알림 메일 기능 | Phase 17 |
+| Lab 템플릿 드롭다운 overflow 수정 | Phase 17 |
+| Lab 토폴로지 노드 라벨 짤림/겹침 수정 | Phase 17 |
+| 메일 오류 처리 개선 (재시도, 재연결, 오류 메시지) | Phase 17 |
+| 사용자 승인 시 Welcome 메일 자동 발송 (메일함 생성) | Phase 17 |
+| SMTP 대안 조사 (docker-mailserver, Apache James 등 7종 비교) | Phase 17 |
+| 메일 코드 전수 감사 (Critical 4 + High 5 + Medium 13) | Phase 17 |
+| JMAP EmailSubmission identityId 수정 (발송 불능 근본 원인) | Phase 17 |
+| EmailSubmission 응답 에러 체크 + 로깅 추가 | Phase 17 |
+| 블로킹 SMTP → asyncio.to_thread() 래핑 (4곳) | Phase 17 |
+| 워치독 연쇄 재시작 수정 (Requires → Wants + 워치독 v2) | Phase 17 |
 | Content-Disposition Header Injection 수정 | Phase 16 |
 | postMessage origin 검증 (MailView, Compose, useMail) | Phase 16 |
 | 이메일 주소 파싱 정규식 검증 강화 | Phase 16 |
@@ -1755,8 +1972,116 @@ location = /.well-known/carddav { return 301 /dav/; }
 | 공유 링크 경로 탈출 방지 | Phase 16 |
 | API Rate Limiting (slowapi) 도입 | Phase 16 |
 | Shiki v-html DOMPurify sanitize 추가 | Phase 16 |
+| 관리 대시보드 신규 (방문자 분석 + 서비스 모니터링) | Phase 18 |
+| AccessLog 미들웨어 (비동기 배치 삽입) | Phase 18 |
+| GeoIP 국가 조회 (MaxMind GeoLite2, LRU 캐시) | Phase 18 |
+| User-Agent 파싱 (규칙 기반, LRU 캐시) | Phase 18 |
+| Chart.js 차트 (Line/Bar/Doughnut, vue-chartjs) | Phase 18 |
+| 분석 API 10개 (overview, daily, countries, service, active, logins, logs, git) | Phase 18 |
+| 국기 이모지 (ISO → Unicode Regional Indicator) | Phase 18 |
+| 접속 로그 자동 정리 (90일, 일일 백그라운드 태스크) | Phase 18 |
+| 데모 사이트 분석 mock 데이터 | Phase 18 |
+| 관리 페이지 서브 탭 네비게이션 (대시보드/사용자) | Phase 18 |
 
-### 22.3 인프라 변경: Stalwart + LDAP Outpost 네이티브 마이그레이션 (2026-02-22)
+### 22.3 Phase 18: 관리 대시보드 — 방문자 분석 + 서비스 현황 모니터링 (완료, 2026-02-24)
+
+관리자 전용 대시보드를 신규 구현하였다. 모든 API 요청을 자동 캡처하여 방문자 통계, 서비스 사용량, 국가별 분포, 실시간 활성 사용자 등을 시각화한다.
+
+#### 22.3.1 백엔드 — AccessLog 미들웨어
+
+| 구성 요소 | 내용 |
+|-----------|------|
+| `AccessLog` 모델 | UUID PK, IP(IPv6 대응), method, path, status_code, response_time_ms, UA 파싱 결과, GeoIP 국가, user_id(FK), service 분류 |
+| 인덱스 | `created_at`, `user_id`, 복합(`created_at, service`), 복합(`created_at, country_code`) |
+| `AccessLogMiddleware` | 모든 `/api/` 요청 캡처 (health/docs 제외), `X-Real-IP` 헤더에서 실제 IP 추출 |
+| 비동기 배치 삽입 | `deque` 버퍼 → 5초마다 or 50건마다 일괄 INSERT (응답 지연 0) |
+| GeoIP | `geoip2` + MaxMind GeoLite2-Country DB (~6MB), `@lru_cache(maxsize=4096)`, 사설 IP 무시 |
+| UA 파서 | 외부 라이브러리 없이 규칙 기반 (Chrome/Firefox/Safari/Edge + OS + Device), `@lru_cache(maxsize=1024)` |
+| 로그 정리 | 매일 03:00 KST 백그라운드 태스크, 90일 이상 로그 자동 삭제 |
+
+**신규 파일:**
+- `backend/app/middleware/__init__.py`
+- `backend/app/middleware/access_log.py` — 미들웨어 + 배치 삽입 + 정리 태스크
+- `backend/app/middleware/geoip.py` — GeoIP 조회
+- `backend/app/middleware/ua_parser.py` — User-Agent 파싱
+
+#### 22.3.2 백엔드 — Analytics API (10개 엔드포인트)
+
+모든 엔드포인트는 `Depends(require_admin)` 보호.
+
+| 엔드포인트 | 파라미터 | 반환 |
+|-----------|---------|------|
+| `GET /api/admin/analytics/overview` | `period=today\|7d\|30d` | 총 방문, 유니크 IP, 인증/비인증, 평균 응답시간 |
+| `GET /api/admin/analytics/daily-visits` | `days=30` | 일별 방문 추이 (날짜, 전체, 인증, 비인증) |
+| `GET /api/admin/analytics/top-pages` | `period`, `limit=10` | 상위 페이지 (경로, 건수) |
+| `GET /api/admin/analytics/countries` | `period`, `limit=15` | 국가별 분포 (코드, 한국어 국가명, 건수) |
+| `GET /api/admin/analytics/service-usage` | `period` | 서비스별 사용량 (mail, calendar, files 등) |
+| `GET /api/admin/analytics/active-users` | — | 5분 내 활성 사용자 (이름, 경로, IP, 국가) |
+| `GET /api/admin/analytics/recent-logins` | `limit=20` | 최근 로그인 (사용자, IP, 국가, 시간) |
+| `GET /api/admin/analytics/access-logs` | `page`, `limit`, `service`, `user_id` | 페이지네이션 원시 로그 |
+| `GET /api/admin/analytics/git-activity` | — | Gitea Push/Issue/PR 이벤트 (전 저장소) |
+| `GET /api/admin/analytics/git-stats` | — | 총 저장소, 사용자, 이슈, PR 현황 |
+
+**신규 파일:** `backend/app/admin/schemas.py`
+
+#### 22.3.3 프론트엔드 — Chart.js 대시보드
+
+패키지 추가: `chart.js`, `vue-chartjs`
+
+| 컴포넌트 | 내용 |
+|----------|------|
+| `AdminAnalyticsOverview.vue` | 4개 stat 카드 (총 방문, 유니크, 인증, 응답시간) |
+| `AdminAnalyticsDailyChart.vue` | Line chart — 일별 방문 추이 (전체/인증/비인증) |
+| `AdminAnalyticsCountries.vue` | 수평 Bar chart — 국가별 분포 + 국기 이모지 |
+| `AdminAnalyticsTopPages.vue` | 수평 Bar chart — 인기 페이지 |
+| `AdminAnalyticsServiceUsage.vue` | Doughnut chart — 서비스별 사용량 (한국어 레이블) |
+| `AdminAnalyticsActiveUsers.vue` | 실시간 테이블 — 5분 내 활성 사용자 |
+| `AdminAnalyticsRecentLogins.vue` | 테이블 — 최근 로그인 (IP 마스킹) |
+| `AdminAnalyticsAccessLogs.vue` | 페이지네이션 테이블 — 원시 로그 (서비스 필터) |
+| `AdminAnalyticsGitActivity.vue` | Git 활동 타임라인 (push/issue/PR 이벤트) |
+
+**국기 이모지:** ISO 코드 → Unicode Regional Indicator 변환 (`KR` → 🇰🇷)
+
+#### 22.3.4 네비게이션 변경
+
+- AppHeader 관리 링크: `/admin/users` → `/admin/dashboard`
+- 관리 페이지 서브 탭: `[대시보드] [사용자 관리]` (양쪽 페이지에 동일하게 표시)
+- 사용자 드롭다운: "사용자 관리" → "관리 대시보드"
+
+#### 22.3.5 데모 사이트 동일 지원
+
+`frontend/demo/mockData.ts`에 10개 분석 API에 대한 mock 데이터 추가:
+- 30일치 랜덤 방문 데이터 (100~300/일)
+- 6개 국가 분포 (KR 85%, US 5%, JP 3%, 기타)
+- 8개 서비스 사용량
+- 활성 사용자 3명, 최근 로그인 5건
+- 접속 로그 50건 (랜덤 생성)
+- Git 활동 6건, Git 통계
+
+#### 22.3.6 수정 파일 요약
+
+| 작업 | 파일 | 내용 |
+|------|------|------|
+| 신규 | `backend/app/middleware/__init__.py` | 패키지 |
+| 신규 | `backend/app/middleware/access_log.py` | 요청 로깅 미들웨어 + 배치 삽입 |
+| 신규 | `backend/app/middleware/geoip.py` | GeoIP 조회 (geoip2 + LRU 캐시) |
+| 신규 | `backend/app/middleware/ua_parser.py` | UA 파싱 (규칙 기반 + LRU 캐시) |
+| 신규 | `backend/app/admin/schemas.py` | Analytics 응답 스키마 (12개) |
+| 신규 | `frontend/pages/admin/dashboard.vue` | 관리 대시보드 페이지 |
+| 신규 | `frontend/composables/useAdminAnalytics.ts` | Analytics composable |
+| 신규 | `frontend/components/admin/Admin*.vue` | 차트/테이블 컴포넌트 9개 |
+| 수정 | `backend/app/db/models.py` | AccessLog 모델 + 4개 인덱스 |
+| 수정 | `backend/app/main.py` | 미들웨어 등록 + 백그라운드 태스크 3개 |
+| 수정 | `backend/app/config.py` | geoip_db_path 설정 |
+| 수정 | `backend/app/admin/router.py` | 분석 엔드포인트 10개 추가 |
+| 수정 | `backend/requirements.txt` | geoip2 추가 |
+| 수정 | `backend/Dockerfile` | GeoIP DB 다운로드 |
+| 수정 | `frontend/package.json` | chart.js, vue-chartjs 추가 |
+| 수정 | `frontend/components/layout/AppHeader.vue` | 관리 네비게이션 변경 |
+| 수정 | `frontend/pages/admin/users.vue` | 서브 탭 추가 |
+| 수정 | `frontend/demo/mockData.ts` | 분석 mock 데이터 10개 |
+
+### 22.5 인프라 변경: Stalwart + LDAP Outpost 네이티브 마이그레이션 (2026-02-22)
 
 192.168.0.250 (Rocky Linux 9.7) 에서 운영 중이던 Stalwart Mail + Authentik LDAP Outpost를 Podman rootless 컨테이너에서 네이티브 systemd 서비스로 전환하였다.
 
@@ -1770,7 +2095,7 @@ location = /.well-known/carddav { return 301 /dav/; }
 | 자동 시작 | Podman 의존 (불안정) | systemd enable (안정) |
 | Watchdog | `podman restart` | `sudo systemctl restart` |
 
-### 22.4 향후 계획
+### 22.6 향후 계획
 
 | 항목 | 내용 | 예상 기술 스택 |
 |------|------|---------------|
@@ -1799,8 +2124,8 @@ location = /.well-known/carddav { return 301 /dav/; }
 | **소프트웨어** | |
 | Identity Provider | Authentik 2025.10.4 |
 | 인증 프로토콜 | OIDC, LDAP, OAuth2 |
-| 포털 프론트엔드 | Nuxt 3, Vue 3, shadcn-vue |
-| 포털 백엔드 | FastAPI, SQLAlchemy 2.0 (async), asyncpg |
+| 포털 프론트엔드 | Nuxt 3, Vue 3, shadcn-vue, Chart.js (vue-chartjs) |
+| 포털 백엔드 | FastAPI, SQLAlchemy 2.0 (async), asyncpg, geoip2 |
 | 리버스 프록시 | Nginx (Rocky Linux 10) |
 | IaC / 학습 | Terraform 1.9.8, LocalStack 3.8, boto3, cytoscape.js |
 | 컨테이너 (Docker) | Authentik, Portal (frontend + backend + nginx + PostgreSQL), Gitea, RustDesk Pro, Game Panel, LocalStack Lab |
@@ -1864,4 +2189,4 @@ location = /.well-known/carddav { return 301 /dav/; }
 
 ---
 
-*문서 끝. 최종 갱신: 2026-02-23 (v2.1 — Phase 16 보안 취약점 감사 및 수정)*
+*문서 끝. 최종 갱신: 2026-02-24 (v2.4 — Phase 18: 관리 대시보드 — 방문자 분석 + 서비스 현황 모니터링)*

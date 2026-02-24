@@ -7,6 +7,8 @@ RUN apt-get update \
     && wget -q https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_amd64.zip -O /tmp/tf.zip \
     && unzip /tmp/tf.zip -d /usr/local/bin/ \
     && rm /tmp/tf.zip \
+    && mkdir -p /app/data \
+    && wget -q https://git.io/GeoLite2-Country.mmdb -O /app/data/GeoLite2-Country.mmdb || true \
     && apt-get purge -y unzip wget \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*

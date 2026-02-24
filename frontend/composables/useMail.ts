@@ -75,6 +75,7 @@ const loadingMessage = ref(false)
 const sending = ref(false)
 const searchQuery = ref('')
 const selectedIds = ref<Set<string>>(new Set())
+let _listenerRegistered = false
 
 export function useMail() {
   // ─── Computed ───
@@ -345,8 +346,9 @@ export function useMail() {
     window.open(url, '_blank')
   }
 
-  // Listen for compose window postMessage (origin 검증)
-  if (import.meta.client) {
+  // Listen for compose window postMessage (origin 검증) — register once
+  if (import.meta.client && !_listenerRegistered) {
+    _listenerRegistered = true
     window.addEventListener('message', (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return
       if (event.data?.type === 'mail-sent') {

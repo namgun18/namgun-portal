@@ -68,10 +68,19 @@ def _parse_keywords(keywords: dict | None) -> tuple[bool, bool]:
 async def _get_account_id(user: User) -> str:
     """Resolve user email to JMAP account ID."""
     if not user.email:
-        raise HTTPException(status_code=400, detail="User has no email address")
-    account_id = await jmap.resolve_account_id(user.email)
+        raise HTTPException(status_code=400, detail="이메일 주소가 설정되지 않았습니다")
+    try:
+        account_id = await jmap.resolve_account_id(user.email)
+    except (httpx.HTTPError, httpx.TimeoutException, ConnectionError):
+        raise HTTPException(
+            status_code=502,
+            detail="메일 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.",
+        )
     if not account_id:
-        raise HTTPException(status_code=404, detail="Mail account not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"메일 계정을 찾을 수 없습니다 ({user.email}). 관리자에게 문의하세요.",
+        )
     return account_id
 
 
@@ -307,17 +316,21 @@ async def send_message(
 ):
     account_id = await _get_account_id(user)
 
-    # Find sent mailbox
+    # Find sent mailbox (fall back to drafts or first mailbox)
     mailboxes = await jmap.get_mailboxes(account_id)
     sent_id = None
+    fallback_id = None
     for mb in mailboxes:
         if mb.get("role") == "sent":
             sent_id = mb["id"]
             break
+        if mb.get("role") == "drafts" and not fallback_id:
+            fallback_id = mb["id"]
+        if not fallback_id:
+            fallback_id = mb["id"]
 
-    mailbox_ids = {}
-    if sent_id:
-        mailbox_ids[sent_id] = True
+    target_id = sent_id or fallback_id
+    mailbox_ids = {target_id: True} if target_id else {}
 
     from_addr = {"name": user.display_name or user.username, "email": user.email}
 
@@ -414,10 +427,11 @@ async def upload_attachment(
     user: User = Depends(get_current_user),
 ):
     account_id = await _get_account_id(user)
-    content = await file.read()
 
-    # 25MB limit
-    if len(content) > 25 * 1024 * 1024:
+    # 25MB limit — read with cap to prevent memory exhaustion
+    max_size = 25 * 1024 * 1024
+    content = await file.read(max_size + 1)
+    if len(content) > max_size:
         raise HTTPException(status_code=413, detail="파일 크기는 25MB를 초과할 수 없습니다")
 
     content_type = file.content_type or "application/octet-stream"

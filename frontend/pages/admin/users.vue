@@ -126,7 +126,25 @@ function formatDate(dateStr: string | null) {
       <p class="text-muted-foreground mt-1">회원가입 승인 및 사용자를 관리하세요</p>
     </div>
 
-    <!-- Tabs -->
+    <!-- Admin sub tabs -->
+    <div class="flex items-center justify-between mb-6 border-b">
+      <div class="flex gap-1">
+        <NuxtLink
+          to="/admin/dashboard"
+          class="px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px border-transparent text-muted-foreground hover:text-foreground"
+        >
+          대시보드
+        </NuxtLink>
+        <NuxtLink
+          to="/admin/users"
+          class="px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px border-primary text-primary"
+        >
+          사용자 관리
+        </NuxtLink>
+      </div>
+    </div>
+
+    <!-- User tabs -->
     <div class="flex gap-1 mb-6 border-b">
       <button
         @click="activeTab = 'pending'"

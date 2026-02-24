@@ -120,9 +120,9 @@ function handleKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="flex flex-col h-full border rounded-lg bg-card overflow-hidden">
-    <!-- Toolbar -->
-    <div class="flex items-center gap-1 px-2 py-1.5 border-b bg-background/80 overflow-x-auto">
+  <div class="flex flex-col h-full border rounded-lg bg-card">
+    <!-- Toolbar (overflow visible for dropdown) -->
+    <div class="relative flex items-center gap-1 px-2 py-1.5 border-b bg-background/80 rounded-t-lg">
       <span class="text-xs font-semibold text-muted-foreground uppercase tracking-wider shrink-0 mr-1">Terraform</span>
 
       <button
@@ -164,11 +164,8 @@ function handleKeydown(e: KeyboardEvent) {
         >
           템플릿
         </button>
-        <div v-if="showTemplates" class="absolute right-0 top-full mt-1 z-20 bg-popover border rounded-md shadow-lg py-1 w-56">
-          <div
-            @click="showTemplates = false"
-            class="fixed inset-0 z-[-1]"
-          />
+        <div v-if="showTemplates" class="absolute right-0 top-full mt-1 z-50 bg-popover border rounded-md shadow-lg py-1 w-56">
+          <div @click="showTemplates = false" class="fixed inset-0 z-[-1]" />
           <button
             v-for="t in tfTemplates"
             :key="t.id"
@@ -235,7 +232,7 @@ function handleKeydown(e: KeyboardEvent) {
     </div>
 
     <!-- Editor + Output split -->
-    <div class="flex-1 flex flex-col min-h-0">
+    <div class="flex-1 flex flex-col min-h-0 overflow-hidden rounded-b-lg">
       <!-- Code editor -->
       <div class="flex-1 min-h-[120px] relative">
         <textarea

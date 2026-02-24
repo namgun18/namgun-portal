@@ -1,8 +1,8 @@
-# namgun.or.kr 종합 포털 — v1.0.0
+# namgun.or.kr 종합 포털 — v1.1.0
 
 셀프 호스팅 통합 플랫폼. Authentik SSO를 중심으로 Git, 메일, 화상회의, 파일 관리, 게임 서버 등 독립 서비스를 하나의 포털 UI로 통합한다.
 
-> **v1.0.0 정식 릴리즈** (2026-02-22) — 15개 Phase 완료, SELinux Enforcing, 전 서비스 네이티브/컨테이너 안정 운영
+> **v1.1.0** (2026-02-24) — 관리 대시보드 추가 (방문자 분석, GeoIP, 실시간 모니터링, Chart.js 차트)
 
 ## 아키텍처
 
@@ -28,7 +28,7 @@ Authentik  Gitea    Stalwart     BigBlueButton  OMV(NFS)     Game Panel
 
 | 분류 | 기술 |
 |------|------|
-| 프론트엔드 | Nuxt 3, Vue 3, TailwindCSS, shadcn-vue |
+| 프론트엔드 | Nuxt 3, Vue 3, TailwindCSS, shadcn-vue, Chart.js (vue-chartjs) |
 | 백엔드 | FastAPI, SQLAlchemy 2.0 (async), asyncpg |
 | 인증 | Authentik 2025.10.4 (OIDC, LDAP, Flow Executor API) |
 | 데이터베이스 | PostgreSQL 16 |
@@ -60,6 +60,9 @@ Authentik  Gitea    Stalwart     BigBlueButton  OMV(NFS)     Game Panel
 - **데모 사이트**: demo.namgun.or.kr에서 로그인 없이 UI 체험
 
 ### 관리자 패널
+- **관리 대시보드**: 방문자 분석 (일별 추이, 국가별 분포, 서비스 사용량), 실시간 활성 사용자, 접속 로그
+- GeoIP 국가 표시 (MaxMind GeoLite2), Chart.js 차트 (Line/Bar/Doughnut)
+- Gitea 활동 추적 (push/issue/PR), 최근 로그인 이력
 - 사용자 승인/거절/비활성화
 - 관리자 권한 부여/해제 (Authentik 그룹 동기화)
 - 전체 사용자 목록 관리
@@ -104,7 +107,8 @@ namgun-portal/
 │       ├── main.py              # FastAPI 앱 초기화
 │       ├── config.py            # 환경 설정
 │       ├── auth/                # 인증 (로그인, 회원가입, OIDC, OAuth 제공자)
-│       ├── admin/               # 관리자 API (사용자 관리, 권한)
+│       ├── admin/               # 관리자 API (사용자 관리, 권한, 방문자 분석)
+│       ├── middleware/          # 접속 로깅, GeoIP, UA 파싱
 │       ├── files/               # 파일 브라우저 (NFS)
 │       ├── mail/                # 메일 (JMAP 클라이언트)
 │       ├── calendar/            # 캘린더 (JMAP for Calendars)
@@ -136,7 +140,7 @@ namgun-portal/
 |------|------|-----------|
 | 인증 | `/api/auth/*` | 로그인, 회원가입, 프로필, 비밀번호 변경/찾기 |
 | OAuth | `/oauth/*` | OIDC Discovery, authorize, token, userinfo |
-| 관리자 | `/api/admin/*` | 사용자 목록, 승인/거절, 권한 관리 |
+| 관리자 | `/api/admin/*` | 사용자 목록, 승인/거절, 권한 관리, 방문자 분석 (10개 엔드포인트) |
 | 파일 | `/api/files/*` | 파일 목록/업로드/다운로드/이동/삭제/공유 |
 | 메일 | `/api/mail/*` | 메일박스, 메시지 CRUD, 전송, 첨부파일 |
 | 캘린더 | `/api/calendar/*` | 캘린더/일정 CRUD, 캘린더 공유, CalDAV 동기화 정보 |
@@ -169,6 +173,7 @@ namgun-portal/
 | v0.7.0 | 2026-02-22 | 캘린더/연락처 — JMAP 기반 캘린더(월/주/일 뷰, 공유), 연락처 관리, CalDAV/CardDAV 동기화, 데모 사이트(demo.namgun.or.kr) |
 | v0.7.1 | 2026-02-22 | 데모 사이트 버그 수정, SSR 하이드레이션 오류 근본 해결, JMAP 연락처/캘린더 호환성 수정, Nginx 캐시 헤더 강화 |
 | **v1.0.0** | **2026-02-22** | **정식 릴리즈** — Stalwart+LDAP 네이티브 전환, SELinux Enforcing, WSL Docker 포트 자동복구, 전체 인프라 안정화 |
+| v1.1.0 | 2026-02-24 | 관리 대시보드 — 방문자 분석 (GeoIP, Chart.js), 실시간 활성 사용자, 접속 로그, Gitea 활동 추적, 데모 mock 데이터 |
 
 ## 라이선스
 

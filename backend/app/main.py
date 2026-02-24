@@ -8,6 +8,8 @@ from slowapi.errors import RateLimitExceeded
 from app.config import get_settings
 from app.rate_limit import limiter
 from app.db.session import init_db
+from app.middleware.access_log import AccessLogMiddleware, run_log_flusher, run_log_cleanup
+from app.middleware.geoip import init_geoip
 from app.auth.router import router as auth_router
 from app.auth.oauth_provider import router as oauth_router
 from app.services.router import router as services_router
@@ -24,24 +26,30 @@ from app.contacts.router import router as contacts_router
 
 settings = get_settings()
 _health_task = None
+_log_flusher_task = None
+_log_cleanup_task = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _health_task
+    global _health_task, _log_flusher_task, _log_cleanup_task
 
     await init_db()
+    init_geoip(settings.geoip_db_path)
     _health_task = asyncio.create_task(run_health_checker())
+    _log_flusher_task = asyncio.create_task(run_log_flusher())
+    _log_cleanup_task = asyncio.create_task(run_log_cleanup())
     print(f"[STARTUP] {settings.app_name} 시작됨")
 
     yield
 
-    if _health_task:
-        _health_task.cancel()
-        try:
-            await _health_task
-        except asyncio.CancelledError:
-            pass
+    for task in (_health_task, _log_flusher_task, _log_cleanup_task):
+        if task:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(
@@ -51,6 +59,8 @@ app = FastAPI(
     docs_url="/api/docs" if settings.debug else None,
     redoc_url=None,
 )
+
+app.add_middleware(AccessLogMiddleware)
 
 # Rate limit 초과 시 429 반환
 app.state.limiter = limiter

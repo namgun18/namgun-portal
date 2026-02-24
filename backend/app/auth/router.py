@@ -274,6 +274,12 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
     except Exception:
         pass  # Don't fail registration if email fails
 
+    # Notify admins of new registration
+    try:
+        await _send_admin_registration_notify(body.username, body.display_name, email, body.recovery_email)
+    except Exception:
+        pass
+
     return {"message": "가입 신청이 완료되었습니다. 복구 이메일로 전송된 인증 링크를 확인해주세요."}
 
 
@@ -399,11 +405,23 @@ async def forgot_password(
     return {"message": success_msg}
 
 
+def _smtp_send(msg) -> None:
+    """Send email via SMTP (blocking, meant to be called via asyncio.to_thread)."""
+    import smtplib
+
+    with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as smtp:
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.ehlo()
+        smtp.login(settings.smtp_user, settings.smtp_password)
+        smtp.send_message(msg)
+
+
 async def _send_verify_email(
     to_email: str, username: str, verify_url: str
 ) -> None:
     """Send email verification link via Stalwart SMTP."""
-    import smtplib
+    import asyncio
     from email.mime.text import MIMEText
 
     msg = MIMEText(
@@ -418,19 +436,14 @@ async def _send_verify_email(
     msg["From"] = settings.smtp_from
     msg["To"] = to_email
 
-    with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as smtp:
-        smtp.ehlo()
-        smtp.starttls()
-        smtp.ehlo()
-        smtp.login(settings.smtp_user, settings.smtp_password)
-        smtp.send_message(msg)
+    await asyncio.to_thread(_smtp_send, msg)
 
 
 async def _send_recovery_email(
     to_email: str, username: str, recovery_link: str
 ) -> None:
     """Send recovery email via Stalwart SMTP."""
-    import smtplib
+    import asyncio
     from email.mime.text import MIMEText
 
     msg = MIMEText(
@@ -445,9 +458,33 @@ async def _send_recovery_email(
     msg["From"] = settings.smtp_from
     msg["To"] = to_email
 
-    with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as smtp:
-        smtp.ehlo()
-        smtp.starttls()
-        smtp.ehlo()
-        smtp.login(settings.smtp_user, settings.smtp_password)
-        smtp.send_message(msg)
+    await asyncio.to_thread(_smtp_send, msg)
+
+
+async def _send_admin_registration_notify(
+    username: str, display_name: str, email: str, recovery_email: str
+) -> None:
+    """Notify admins when a new user registers."""
+    import asyncio
+    from email.mime.text import MIMEText
+
+    admin_list = [e.strip() for e in settings.admin_emails.split(",") if e.strip()]
+    if not admin_list:
+        return
+
+    msg = MIMEText(
+        f"새로운 가입 신청이 접수되었습니다.\n\n"
+        f"  사용자명: {username}\n"
+        f"  표시 이름: {display_name or '(없음)'}\n"
+        f"  포털 메일: {email}\n"
+        f"  복구 이메일: {recovery_email}\n\n"
+        f"포털 관리 페이지에서 승인/거절해주세요:\n"
+        f"{settings.app_url}/admin/users",
+        "plain",
+        "utf-8",
+    )
+    msg["Subject"] = f"[namgun.or.kr] 새 가입 신청: {username}"
+    msg["From"] = settings.smtp_from
+    msg["To"] = ", ".join(admin_list)
+
+    await asyncio.to_thread(_smtp_send, msg)

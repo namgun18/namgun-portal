@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = "noreply@namgun.or.kr"
 
+    # Admin notification
+    admin_emails: str = "namgun18@namgun.or.kr"  # comma-separated
+
     # BigBlueButton
     bbb_url: str = "https://meet.namgun.or.kr/bigbluebutton/api"
     bbb_secret: str = ""
@@ -50,6 +53,9 @@ class Settings(BaseSettings):
     # Gitea
     gitea_url: str = "http://192.168.0.50:3000"
     gitea_token: str = ""
+
+    # GeoIP
+    geoip_db_path: str = "/app/data/GeoLite2-Country.mmdb"
 
     # Portal OAuth Provider (for Gitea etc.)
     oauth_clients_json: str = "{}"

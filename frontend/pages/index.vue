@@ -24,9 +24,8 @@ definePageMeta({ layout: 'default' })
       <!-- Left 2 cols: recent git -->
       <DashboardRecentGit />
 
-      <!-- Right col: meetings + game servers -->
+      <!-- Right col: game servers -->
       <div class="space-y-4">
-        <DashboardMeetings />
         <DashboardGameServers />
       </div>
     </div>

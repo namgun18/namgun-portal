@@ -10,12 +10,6 @@ from app.services.schemas import ServiceStatus
 # Service definitions (MVP hardcoded)
 SERVICE_DEFS = [
     {
-        "name": "Authentik",
-        "health_url": "http://192.168.0.50:9000/-/health/ready/",
-        "external_url": "https://auth.namgun.or.kr",
-        "internal_only": False,
-    },
-    {
         "name": "Gitea",
         "health_url": "http://192.168.0.50:3000/api/v1/version",
         "health_headers": {"Authorization": "token 3fea3feb8153dee6707cf12258343d357c9a1d01"},
@@ -38,12 +32,6 @@ SERVICE_DEFS = [
         "name": "Stalwart Mail",
         "health_url": "http://192.168.0.250:8080/.well-known/jmap",
         "external_url": "https://mail.namgun.or.kr",
-        "internal_only": True,
-    },
-    {
-        "name": "화상회의 (BBB)",
-        "health_url": "https://meet.namgun.or.kr/bigbluebutton/api",
-        "external_url": None,
         "internal_only": True,
     },
 ]

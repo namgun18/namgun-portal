@@ -8,7 +8,6 @@ export default defineNuxtRouteMiddleware((to) => {
   // Allow public pages
   const publicPages = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email']
   if (publicPages.includes(to.path)) return
-  if (to.path.startsWith('/join/')) return
 
   // If not loading and no user, redirect to login
   if (!loading.value && !user.value) {

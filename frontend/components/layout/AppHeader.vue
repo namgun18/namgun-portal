@@ -60,13 +60,6 @@ function toggleDark() {
             연락처
           </NuxtLink>
           <NuxtLink
-            to="/meetings"
-            class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
-            :class="route.path === '/meetings' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'"
-          >
-            회의
-          </NuxtLink>
-          <NuxtLink
             to="/git"
             class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
             :class="route.path === '/git' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'"
@@ -212,14 +205,6 @@ function toggleDark() {
         :class="route.path === '/contacts' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'"
       >
         연락처
-      </NuxtLink>
-      <NuxtLink
-        to="/meetings"
-        @click="mobileMenuOpen = false"
-        class="block px-3 py-2 text-sm font-medium rounded-md transition-colors"
-        :class="route.path === '/meetings' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'"
-      >
-        회의
       </NuxtLink>
       <NuxtLink
         to="/git"

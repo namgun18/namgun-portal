@@ -33,10 +33,6 @@ class Settings(BaseSettings):
     # Admin notification
     admin_emails: str = "namgun18@namgun.or.kr"  # comma-separated
 
-    # BigBlueButton
-    bbb_url: str = "https://meet.namgun.or.kr/bigbluebutton/api"
-    bbb_secret: str = ""
-
     # Gitea
     gitea_url: str = "http://192.168.0.50:3000"
     gitea_token: str = ""

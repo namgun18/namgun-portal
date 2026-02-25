@@ -370,51 +370,13 @@ export const demoStorageInfo = {
   disk_used: 20265213952,
 }
 
-// ─── Meetings (matches Meeting[] / MeetingDetail) ───
-
-export const demoMeetingList = [
-  {
-    meetingID: 'meet-001', meetingName: '주간 팀 미팅', running: true,
-    participantCount: 5, moderatorCount: 1,
-    createTime: String(Date.now() - 1800000), hasBeenForciblyEnded: false,
-  },
-  {
-    meetingID: 'meet-002', meetingName: '프로젝트 킥오프', running: true,
-    participantCount: 3, moderatorCount: 1,
-    createTime: String(Date.now() - 3600000), hasBeenForciblyEnded: false,
-  },
-  {
-    meetingID: 'meet-003', meetingName: '기술 세미나', running: false,
-    participantCount: 0, moderatorCount: 0,
-    createTime: String(Date.now() - 172800000), hasBeenForciblyEnded: false,
-  },
-]
-
-export const demoMeetingDetail = {
-  meetingID: 'meet-001', meetingName: '주간 팀 미팅', running: true,
-  participantCount: 5, moderatorCount: 1,
-  createTime: String(Date.now() - 1800000), hasBeenForciblyEnded: false,
-  startTime: String(Date.now() - 1800000),
-  moderatorPW: 'demo', attendeePW: 'demo',
-  internalMeetingID: 'internal-meet-001',
-  attendees: [
-    { fullName: '데모 사용자', role: 'MODERATOR', hasJoinedVoice: true, hasVideo: true },
-    { fullName: '김철수', role: 'VIEWER', hasJoinedVoice: true, hasVideo: false },
-    { fullName: '이영희', role: 'VIEWER', hasJoinedVoice: true, hasVideo: true },
-    { fullName: '박민수', role: 'VIEWER', hasJoinedVoice: false, hasVideo: false },
-    { fullName: '정수진', role: 'VIEWER', hasJoinedVoice: true, hasVideo: false },
-  ],
-}
-
 // ─── Services (matches ServiceStatus[] — array directly) ───
 
 export const demoServicesList = [
   { name: 'mail', url: 'https://mail.namgun.or.kr', status: 'ok' as const, response_ms: 45, internal_only: false },
   { name: 'git', url: 'https://git.namgun.or.kr', status: 'ok' as const, response_ms: 32, internal_only: false },
-  { name: 'bbb', url: 'https://meet.namgun.or.kr', status: 'ok' as const, response_ms: 128, internal_only: false },
   { name: 'files', url: 'https://file.namgun.or.kr', status: 'ok' as const, response_ms: 67, internal_only: false },
   { name: 'game', url: 'https://game.namgun.or.kr', status: 'ok' as const, response_ms: 89, internal_only: false },
-  { name: 'authentik', url: null, status: 'ok' as const, response_ms: 22, internal_only: true },
 ]
 
 // ─── Dashboard — Game Servers (matches GameServer[] — { name, status, game }) ───
@@ -548,7 +510,6 @@ const demoTopPages = [
   { path: '/api/contacts/', count: 98 },
   { path: '/api/git/repos', count: 87 },
   { path: '/api/services/status', count: 76 },
-  { path: '/api/meetings', count: 54 },
   { path: '/api/admin/users', count: 32 },
 ]
 
@@ -568,7 +529,6 @@ const demoServiceUsage = [
   { service: 'auth', count: 167 },
   { service: 'contacts', count: 98 },
   { service: 'git', count: 87 },
-  { service: 'meetings', count: 54 },
   { service: 'admin', count: 32 },
 ]
 
@@ -742,15 +702,6 @@ export function getMockResponse(method: string, path: string, query?: Record<str
   if (path === '/api/files/share/list') return []
   if (path === '/api/files/download' || path === '/api/files/preview') return '__DEMO_BLOCK__'
   if (path.startsWith('/api/files')) return getFileList(query?.path)
-
-  // Meetings (specific routes before catch-all)
-  if (path.match(/^\/api\/meetings\/[\w-]+\/invite$/) && method === 'GET') {
-    return { invite_url: 'https://demo.namgun.or.kr/join/demo-meeting', short_url: 'https://demo.namgun.or.kr/m/abc123' }
-  }
-  if (path === '/api/meetings/recordings') return []
-  if (path.match(/^\/api\/meetings\/[\w-]+$/) && method === 'GET') return demoMeetingDetail
-  if (path === '/api/meetings/' && method === 'GET') return demoMeetingList
-  if (path === '/api/meetings' && method === 'GET') return demoMeetingList
 
   // Services — composable expects ServiceStatus[] (array directly)
   if (path === '/api/services/status') return demoServicesList

@@ -11,12 +11,8 @@ class Settings(BaseSettings):
     # PostgreSQL
     database_url: str = "postgresql+asyncpg://portal:portal@portal-db:5432/portal"
 
-    # Authentik OIDC
-    oidc_issuer: str = "https://auth.namgun.or.kr/application/o/portal/"
-    oidc_client_id: str = ""
-    oidc_client_secret: str = ""
-    oidc_redirect_uri: str = "https://namgun.or.kr/api/auth/callback"
-    oidc_admin_group: str = "authentik Admins"
+    # Domain
+    domain: str = "namgun.or.kr"
 
     # File storage
     storage_root: str = "/storage"
@@ -40,15 +36,6 @@ class Settings(BaseSettings):
     # BigBlueButton
     bbb_url: str = "https://meet.namgun.or.kr/bigbluebutton/api"
     bbb_secret: str = ""
-
-    # Authentik Server-Side Auth
-    authentik_base_url: str = "https://auth.namgun.or.kr"
-    authentik_flow_slug: str = "default-authentication-flow"
-
-    # Authentik Admin API
-    authentik_api_token: str = ""
-    authentik_users_group_pk: str = ""
-    authentik_admins_group_pk: str = ""
 
     # Gitea
     gitea_url: str = "http://192.168.0.50:3000"

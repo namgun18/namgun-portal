@@ -15,9 +15,14 @@ class User(Base):
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    authentik_sub: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    authentik_sub: Mapped[str | None] = mapped_column(String(255), nullable=True)
     authentik_pk: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    username: Mapped[str] = mapped_column(String(150))
+    username: Mapped[str] = mapped_column(String(150), unique=True, index=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    password_reset_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    password_reset_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
